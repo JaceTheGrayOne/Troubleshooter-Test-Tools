@@ -1,0 +1,6 @@
+_local/
+Logs/*
+!Logs/.gitkeep
+*.log
+*.tmp
+*.bak

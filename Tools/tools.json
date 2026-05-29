@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "tools": [
+    {
+      "id": "ping-monitor",
+      "name": "Ping Monitor",
+      "order": 10,
+      "description": "Runs a mock connectivity monitor and streams the log output into the launcher.",
+      "scriptType": "powershell",
+      "script": "Scripts/ExampleWorker.ps1",
+      "mode": "PingMonitor",
+      "logPrefix": "PingMonitor",
+      "fields": [
+        {
+          "name": "Target",
+          "label": "Target Host / IP",
+          "type": "text",
+          "default": "127.0.0.1",
+          "argument": "Target"
+        },
+        {
+          "name": "IntervalSeconds",
+          "label": "Interval Seconds",
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 3600,
+          "argument": "IntervalSeconds"
+        },
+        {
+          "name": "DurationSeconds",
+          "label": "Duration Seconds",
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 86400,
+          "argument": "DurationSeconds"
+        }
+      ]
+    },
+    {
+      "id": "gps-keepalive",
+      "name": "GPS Keepalive",
+      "order": 20,
+      "description": "Mock serial keepalive tool. The target field stands in for a COM port until the real serial code is added.",
+      "scriptType": "powershell",
+      "script": "Scripts/ExampleWorker.ps1",
+      "mode": "GpsKeepalive",
+      "logPrefix": "GpsKeepalive",
+      "fields": [
+        {
+          "name": "Target",
+          "label": "COM Port",
+          "type": "text",
+          "default": "COM1",
+          "argument": "Target"
+        },
+        {
+          "name": "IntervalSeconds",
+          "label": "Interval Seconds",
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 3600,
+          "argument": "IntervalSeconds"
+        },
+        {
+          "name": "DurationSeconds",
+          "label": "Duration Seconds",
+          "type": "number",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 86400,
+          "argument": "DurationSeconds"
+        }
+      ]
+    },
+    {
+      "id": "quick-check",
+      "name": "Quick Check",
+      "order": 30,
+      "description": "Small mock task for proving the modular field renderer with a checkbox and a choice field.",
+      "scriptType": "powershell",
+      "script": "Scripts/ExampleWorker.ps1",
+      "mode": "QuickCheck",
+      "logPrefix": "QuickCheck",
+      "fields": [
+        {
+          "name": "Target",
+          "label": "Label",
+          "type": "text",
+          "default": "Bench Test",
+          "argument": "Target"
+        },
+        {
+          "name": "IntervalSeconds",
+          "label": "Sample Interval",
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 60,
+          "argument": "IntervalSeconds"
+        },
+        {
+          "name": "DurationSeconds",
+          "label": "Duration Seconds",
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 120,
+          "argument": "DurationSeconds"
+        }
+      ]
+    }
+  ]
+}
