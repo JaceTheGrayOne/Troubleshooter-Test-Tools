@@ -13,7 +13,7 @@ function Get-ToolDefinitions {
     }
 
     $ids = @{}
-    $tools = foreach ($tool in @($catalog.tools)) {
+    foreach ($tool in @($catalog.tools)) {
         if ([string]::IsNullOrWhiteSpace($tool.id)) {
             throw 'A tool entry is missing an id.'
         }
@@ -38,15 +38,10 @@ function Get-ToolDefinitions {
             if ([string]::IsNullOrWhiteSpace($field.type)) {
                 $field | Add-Member -NotePropertyName type -NotePropertyValue 'text' -Force
             }
-            if ([string]::IsNullOrWhiteSpace($field.argument)) {
-                $field | Add-Member -NotePropertyName argument -NotePropertyValue $field.name -Force
-            }
         }
 
         $tool
     }
-
-    return @($tools | Sort-Object @{ Expression = { if ($null -ne $_.order) { [int]$_.order } else { 9999 } } }, name)
 }
 
 function Resolve-ToolPath {
@@ -105,24 +100,22 @@ function New-PowerShellWorkerCommand {
         [Parameter(Mandatory)][string]$ScriptPath,
         [Parameter(Mandatory)]$Tool,
         [Parameter(Mandatory)][hashtable]$FieldValues,
-        [Parameter(Mandatory)][string]$LogPath
+        [Parameter(Mandatory)][string]$LogPath,
+        [AllowEmptyString()][string]$InputPath = ''
     )
 
     $parts = @('& {0}' -f (ConvertTo-PowerShellLiteral -Value $ScriptPath))
 
-    if (-not [string]::IsNullOrWhiteSpace($Tool.mode)) {
-        $modeArgument = if ([string]::IsNullOrWhiteSpace($Tool.modeArgument)) { 'Mode' } else { [string]$Tool.modeArgument }
-        $parts += '-{0} {1}' -f $modeArgument, (ConvertTo-PowerShellLiteral -Value $Tool.mode)
-    }
-
     foreach ($field in @($Tool.fields)) {
-        $argument = if ([string]::IsNullOrWhiteSpace($field.argument)) { [string]$field.name } else { [string]$field.argument }
         $value = $FieldValues[$field.name]
-        $parts += '-{0} {1}' -f $argument, (ConvertTo-PowerShellLiteral -Value $value)
+        $parts += '-{0} {1}' -f $field.name, (ConvertTo-PowerShellLiteral -Value $value)
     }
 
-    $logArgument = if ([string]::IsNullOrWhiteSpace($Tool.logArgument)) { 'LogPath' } else { [string]$Tool.logArgument }
-    $parts += '-{0} {1}' -f $logArgument, (ConvertTo-PowerShellLiteral -Value $LogPath)
+    $parts += '-LogPath {0}' -f (ConvertTo-PowerShellLiteral -Value $LogPath)
+
+    if (-not [string]::IsNullOrWhiteSpace($InputPath)) {
+        $parts += '-InputPath {0}' -f (ConvertTo-PowerShellLiteral -Value $InputPath)
+    }
 
     return $parts -join ' '
 }
@@ -145,36 +138,51 @@ function Start-ConfiguredTool {
     }
 
     $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $logPrefix = if ([string]::IsNullOrWhiteSpace($Tool.logPrefix)) { [string]$Tool.id } else { [string]$Tool.logPrefix }
-    $logPath = Join-Path $LogsPath ('{0}-{1}.log' -f (Get-SafeLogName -Value $logPrefix), $timestamp)
+    $logName = Get-SafeLogName -Value ([string]$Tool.id)
+    $logPath = Join-Path $LogsPath ('{0}-{1}.log' -f $logName, $timestamp)
+    $inputPath = $null
 
-    $scriptType = if ([string]::IsNullOrWhiteSpace($Tool.scriptType)) { 'powershell' } else { [string]$Tool.scriptType }
-
-    switch ($scriptType.ToLowerInvariant()) {
-        'powershell' {
-            $command = New-PowerShellWorkerCommand -ScriptPath $scriptPath -Tool $Tool -FieldValues $FieldValues -LogPath $logPath
-            $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
-            $process = Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded" -WindowStyle Hidden -PassThru
-        }
-
-        'batch' {
-            $process = Start-Process -FilePath cmd.exe -ArgumentList ('/c "{0}"' -f $scriptPath) -WindowStyle Hidden -PassThru
-        }
-
-        default {
-            throw "Unsupported scriptType '$scriptType' for tool '$($Tool.id)'."
-        }
+    if ($Tool.interactiveInput -and [bool]$Tool.interactiveInput) {
+        $inputPath = Join-Path $LogsPath ('{0}-{1}.input.jsonl' -f $logName, $timestamp)
+        Set-Content -LiteralPath $inputPath -Value '' -NoNewline -Encoding UTF8
     }
+
+    $command = New-PowerShellWorkerCommand -ScriptPath $scriptPath -Tool $Tool -FieldValues $FieldValues -LogPath $logPath -InputPath $inputPath
+    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+    $process = Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded" -WindowStyle Hidden -PassThru
 
     return [pscustomobject]@{
         ToolId = [string]$Tool.id
         ToolName = [string]$Tool.name
         Process = $process
         LogPath = $logPath
+        InputPath = $inputPath
         StartedAt = Get-Date
         EndedAt = $null
         ExitCode = $null
     }
+}
+
+function Send-ToolRunInput {
+    param(
+        [Parameter(Mandatory)]$Run,
+        [AllowEmptyString()][string]$Text
+    )
+
+    if (-not $Run -or [string]::IsNullOrWhiteSpace($Run.InputPath)) {
+        throw 'The selected tool run does not accept console input.'
+    }
+
+    if (-not (Test-Path -LiteralPath $Run.InputPath)) {
+        Set-Content -LiteralPath $Run.InputPath -Value '' -NoNewline -Encoding UTF8
+    }
+
+    $entry = [pscustomobject]@{
+        submittedAt = (Get-Date).ToString('o')
+        text = $Text
+    }
+
+    $entry | ConvertTo-Json -Compress | Add-Content -LiteralPath $Run.InputPath -Encoding UTF8
 }
 
 function Test-ToolRunActive {

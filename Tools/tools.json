@@ -1,114 +1,102 @@
 {
-  "schemaVersion": 1,
   "tools": [
     {
-      "id": "ping-monitor",
-      "name": "Ping Monitor",
-      "order": 10,
-      "description": "Runs a mock connectivity monitor and streams the log output into the launcher.",
-      "scriptType": "powershell",
-      "script": "Scripts/ExampleWorker.ps1",
-      "mode": "PingMonitor",
-      "logPrefix": "PingMonitor",
+      "id": "spectracom-gps-auth",
+      "name": "Spectracom GPS Auth",
+      "description": "Authenticates a Spectracom SecureSync over serial. It wakes the prompt, checks whether authentication is already valid, and sends credentials only when needed.",
+      "script": "Scripts/SpectracomGpsAuth.ps1",
       "fields": [
         {
-          "name": "Target",
-          "label": "Target Host / IP",
-          "type": "text",
-          "default": "127.0.0.1",
-          "argument": "Target"
-        },
-        {
-          "name": "IntervalSeconds",
-          "label": "Interval Seconds",
-          "type": "number",
-          "default": 1,
-          "minimum": 1,
-          "maximum": 3600,
-          "argument": "IntervalSeconds"
-        },
-        {
-          "name": "DurationSeconds",
-          "label": "Duration Seconds",
-          "type": "number",
-          "default": 30,
-          "minimum": 1,
-          "maximum": 86400,
-          "argument": "DurationSeconds"
-        }
-      ]
-    },
-    {
-      "id": "gps-keepalive",
-      "name": "GPS Keepalive",
-      "order": 20,
-      "description": "Mock serial keepalive tool. The target field stands in for a COM port until the real serial code is added.",
-      "scriptType": "powershell",
-      "script": "Scripts/ExampleWorker.ps1",
-      "mode": "GpsKeepalive",
-      "logPrefix": "GpsKeepalive",
-      "fields": [
-        {
-          "name": "Target",
+          "name": "Port",
           "label": "COM Port",
-          "type": "text",
-          "default": "COM1",
-          "argument": "Target"
+          "default": "COM1"
         },
         {
-          "name": "IntervalSeconds",
-          "label": "Interval Seconds",
+          "name": "BaudRate",
+          "label": "Baud Rate",
           "type": "number",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 3600,
-          "argument": "IntervalSeconds"
+          "default": 9600,
+          "minimum": 300,
+          "maximum": 921600
         },
         {
-          "name": "DurationSeconds",
-          "label": "Duration Seconds",
+          "name": "Parity",
+          "label": "Parity",
+          "type": "choice",
+          "default": "None",
+          "options": [
+            "None",
+            "Odd",
+            "Even",
+            "Mark",
+            "Space"
+          ]
+        },
+        {
+          "name": "DataBits",
+          "label": "Data Bits",
           "type": "number",
-          "default": 60,
-          "minimum": 1,
-          "maximum": 86400,
-          "argument": "DurationSeconds"
+          "default": 8,
+          "minimum": 5,
+          "maximum": 8
+        },
+        {
+          "name": "StopBits",
+          "label": "Stop Bits",
+          "type": "choice",
+          "default": "One",
+          "options": [
+            "One",
+            "Two",
+            "OnePointFive"
+          ]
+        },
+        {
+          "name": "Username",
+          "label": "Username",
+          "default": "spadmin"
+        },
+        {
+          "name": "Password",
+          "label": "Password",
+          "type": "password",
+          "default": "admin123"
+        },
+        {
+          "name": "WakePrompt",
+          "label": "Wake Prompt",
+          "type": "checkbox",
+          "default": true
         }
       ]
     },
     {
-      "id": "quick-check",
-      "name": "Quick Check",
-      "order": 30,
-      "description": "Small mock task for proving the modular field renderer with a checkbox and a choice field.",
-      "scriptType": "powershell",
-      "script": "Scripts/ExampleWorker.ps1",
-      "mode": "QuickCheck",
-      "logPrefix": "QuickCheck",
+      "id": "rmup-console",
+      "name": "RMUP Console",
+      "description": "Native telnet console for the RMUP software-load log at 192.168.200.100:23 with prompted command input.",
+      "script": "Scripts/RmupConsole.ps1",
+      "interactiveInput": true,
       "fields": [
         {
-          "name": "Target",
-          "label": "Label",
-          "type": "text",
-          "default": "Bench Test",
-          "argument": "Target"
+          "name": "TargetHost",
+          "label": "Target Host / IP",
+          "default": "192.168.200.100"
         },
         {
-          "name": "IntervalSeconds",
-          "label": "Sample Interval",
+          "name": "Port",
+          "label": "Port",
           "type": "number",
-          "default": 1,
+          "default": 23,
           "minimum": 1,
-          "maximum": 60,
-          "argument": "IntervalSeconds"
+          "maximum": 65535
         },
         {
-          "name": "DurationSeconds",
-          "label": "Duration Seconds",
+          "name": "ConnectTimeoutMilliseconds",
+          "label": "Connect Timeout (ms)",
           "type": "number",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 120,
-          "argument": "DurationSeconds"
+          "default": 10000,
+          "minimum": 100,
+          "maximum": 60000
         }
       ]
     }

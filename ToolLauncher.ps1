@@ -32,6 +32,7 @@ $script:fieldControls = @{}
 $script:currentTool = $null
 $script:lastRenderedLogPath = $null
 $script:lastRenderedLogText = ''
+$script:logClearOffsets = @{}
 
 $script:colors = @{
     Window = [System.Drawing.ColorTranslator]::FromHtml('#101417')
@@ -41,8 +42,8 @@ $script:colors = @{
     Border = [System.Drawing.ColorTranslator]::FromHtml('#343c44')
     Text = [System.Drawing.ColorTranslator]::FromHtml('#f4f7fa')
     Muted = [System.Drawing.ColorTranslator]::FromHtml('#aab4bf')
-    Accent = [System.Drawing.ColorTranslator]::FromHtml('#d7aa4a')
-    AccentDark = [System.Drawing.ColorTranslator]::FromHtml('#755b25')
+    Accent = [System.Drawing.ColorTranslator]::FromHtml('#0078d4')
+    AccentDark = [System.Drawing.ColorTranslator]::FromHtml('#005a9e')
     Teal = [System.Drawing.ColorTranslator]::FromHtml('#37b9ad')
 }
 
@@ -111,6 +112,12 @@ function Test-AnyToolRunning {
     return $false
 }
 
+function Test-ToolInteractiveInput {
+    param([AllowNull()]$Tool)
+
+    return ($Tool -and $Tool.interactiveInput -and [bool]$Tool.interactiveInput)
+}
+
 function Get-SavedFieldValue {
     param(
         [Parameter(Mandatory)]$Tool,
@@ -146,6 +153,9 @@ function Save-CurrentFieldValues {
             'choice' {
                 $script:toolValues[$key] = [string]$control.SelectedItem
             }
+            'password' {
+                $script:toolValues[$key] = [string]$control.Text
+            }
             default {
                 $script:toolValues[$key] = [string]$control.Text
             }
@@ -178,6 +188,23 @@ function Set-ToolEditorEnabled {
 
     $startButton.Enabled = $Enabled -and ($null -ne $script:currentTool)
     $stopButton.Enabled = -not $Enabled
+}
+
+function Refresh-ConsoleInputState {
+    $isInteractive = Test-ToolInteractiveInput -Tool $script:currentTool
+    $run = Get-CurrentToolRun
+    $isRunning = Test-ToolRunActive -Run $run
+    $canSendInput = $isInteractive -and $isRunning -and $run -and -not [string]::IsNullOrWhiteSpace($run.InputPath)
+
+    $consoleInputLabel.Visible = $isInteractive
+    $consoleInputBox.Visible = $isInteractive
+    $sendInputButton.Visible = $isInteractive
+    $consoleInputBox.Enabled = $canSendInput
+    $sendInputButton.Enabled = $canSendInput
+
+    if (-not $isInteractive) {
+        $consoleInputBox.Clear()
+    }
 }
 
 function Get-RunStateText {
@@ -213,6 +240,7 @@ function Refresh-StatusForCurrentTool {
     $runStateLabel.Text = Get-RunStateText -Run $run
     $runStateLabel.ForeColor = if ($isRunning) { $script:colors.Teal } else { $script:colors.Muted }
     Set-ToolEditorEnabled -Enabled (-not $isRunning)
+    Refresh-ConsoleInputState
 }
 
 function Refresh-LogView {
@@ -233,6 +261,16 @@ function Refresh-LogView {
     }
 
     $text = Read-SharedTextFile -Path $run.LogPath
+    if ($script:logClearOffsets.ContainsKey($run.LogPath)) {
+        $clearOffset = [int]$script:logClearOffsets[$run.LogPath]
+        if ($clearOffset -le $text.Length) {
+            $text = $text.Substring($clearOffset)
+        }
+        else {
+            $script:logClearOffsets.Remove($run.LogPath)
+        }
+    }
+
     if ($text -ne $script:lastRenderedLogText) {
         $script:lastRenderedLogText = $text
         $logBox.Text = $text
@@ -295,6 +333,16 @@ function Render-Field {
             $control.Location = New-Point 250 ($Y - 3)
             $control.Size = New-Size 260 26
             Set-ControlTheme -Control $control
+        }
+
+        'password' {
+            $control = New-Object System.Windows.Forms.TextBox
+            $control.Text = [string]$savedValue
+            $control.UseSystemPasswordChar = $true
+            $control.Location = New-Point 250 ($Y - 3)
+            $control.Size = New-Size 420 26
+            $control.Anchor = 'Top, Left, Right'
+            Set-TextBoxTheme -TextBox $control
         }
 
         default {
@@ -361,18 +409,6 @@ function Render-Tool {
 }
 
 function Load-ToolCatalog {
-    if (Test-AnyToolRunning) {
-        [System.Windows.Forms.MessageBox]::Show(
-            'Stop running tools before reloading the catalog.',
-            'Tools Running',
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        ) | Out-Null
-        return
-    }
-
-    Save-CurrentFieldValues
-
     try {
         $script:tools = @(Get-ToolDefinitions -CatalogPath $script:catalogPath)
     }
@@ -421,13 +457,13 @@ function Start-SelectedTool {
         $script:toolRuns[$script:currentTool.id] = $run
         $script:lastRenderedLogPath = $null
         $script:lastRenderedLogText = ''
-        $statusLabel.Text = 'Started {0}. Log: {1}' -f $script:currentTool.name, $run.LogPath
+        $statusLabel.Text = 'Running {0}. Log: {1}' -f $script:currentTool.name, $run.LogPath
         Refresh-StatusForCurrentTool
         Refresh-LogView
     }
     catch {
-        $statusLabel.Text = 'Start failed.'
-        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Start Failed', 'OK', 'Error') | Out-Null
+        $statusLabel.Text = 'Run failed.'
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Run Failed', 'OK', 'Error') | Out-Null
     }
 }
 
@@ -448,6 +484,23 @@ function Stop-SelectedTool {
     finally {
         Refresh-StatusForCurrentTool
         Refresh-LogView
+    }
+}
+
+function Send-ConsoleInput {
+    $run = Get-CurrentToolRun
+    if (-not (Test-ToolRunActive -Run $run)) {
+        return
+    }
+
+    try {
+        Send-ToolRunInput -Run $run -Text ([string]$consoleInputBox.Text)
+        $consoleInputBox.Clear()
+        $consoleInputBox.Focus()
+    }
+    catch {
+        $statusLabel.Text = 'Input send failed.'
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Input Send Failed', 'OK', 'Error') | Out-Null
     }
 }
 
@@ -513,36 +566,6 @@ $appTitleLabel.Size = New-Size 360 30
 $appTitleLabel.ForeColor = $script:colors.Text
 $appTitleLabel.BackColor = $script:colors.Panel
 $topPanel.Controls.Add($appTitleLabel)
-
-$catalogLabel = New-Object System.Windows.Forms.Label
-$catalogLabel.Text = 'Catalog: Tools\tools.json'
-$catalogLabel.Location = New-Point 18 48
-$catalogLabel.Size = New-Size 360 20
-$catalogLabel.ForeColor = $script:colors.Muted
-$catalogLabel.BackColor = $script:colors.Panel
-$topPanel.Controls.Add($catalogLabel)
-
-$reloadButton = New-Object System.Windows.Forms.Button
-$reloadButton.Text = 'Reload Catalog'
-$reloadButton.Size = New-Size 120 32
-$reloadButton.Location = New-Point 802 22
-$reloadButton.Anchor = 'Top, Right'
-$reloadButton.Add_Click({ Load-ToolCatalog })
-Set-ButtonTheme -Button $reloadButton
-$topPanel.Controls.Add($reloadButton)
-
-$openCatalogButton = New-Object System.Windows.Forms.Button
-$openCatalogButton.Text = 'Open Catalog'
-$openCatalogButton.Size = New-Size 118 32
-$openCatalogButton.Location = New-Point 936 22
-$openCatalogButton.Anchor = 'Top, Right'
-$openCatalogButton.Add_Click({
-    if (Test-Path -LiteralPath $script:catalogPath) {
-        Start-Process notepad.exe -ArgumentList ('"{0}"' -f $script:catalogPath)
-    }
-})
-Set-ButtonTheme -Button $openCatalogButton
-$topPanel.Controls.Add($openCatalogButton)
 
 $navPanel = New-Object System.Windows.Forms.Panel
 $navPanel.Location = New-Point 16 108
@@ -623,10 +646,11 @@ $fieldsPanel.Size = New-Size 754 176
 $fieldsPanel.Anchor = 'Top, Left, Right'
 $fieldsPanel.BackColor = $script:colors.Surface
 $fieldsPanel.BorderStyle = 'FixedSingle'
+$fieldsPanel.AutoScroll = $true
 $contentPanel.Controls.Add($fieldsPanel)
 
 $startButton = New-Object System.Windows.Forms.Button
-$startButton.Text = 'Start'
+$startButton.Text = 'Run'
 $startButton.Location = New-Point 18 296
 $startButton.Size = New-Size 96 34
 $startButton.Add_Click({ Start-SelectedTool })
@@ -659,6 +683,12 @@ $clearLogButton.Text = 'Clear View'
 $clearLogButton.Location = New-Point 352 296
 $clearLogButton.Size = New-Size 100 34
 $clearLogButton.Add_Click({
+    $run = Get-CurrentToolRun
+    if ($run -and -not [string]::IsNullOrWhiteSpace($run.LogPath)) {
+        $currentText = Read-SharedTextFile -Path $run.LogPath
+        $script:logClearOffsets[$run.LogPath] = $currentText.Length
+    }
+
     $script:lastRenderedLogText = ''
     $logBox.Clear()
 })
@@ -666,7 +696,7 @@ Set-ButtonTheme -Button $clearLogButton
 $contentPanel.Controls.Add($clearLogButton)
 
 $logLabel = New-Object System.Windows.Forms.Label
-$logLabel.Text = 'Live Log'
+$logLabel.Text = 'Console Output'
 $logLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
 $logLabel.Location = New-Point 18 348
 $logLabel.Size = New-Size 120 24
@@ -676,7 +706,7 @@ $contentPanel.Controls.Add($logLabel)
 
 $logBox = New-Object System.Windows.Forms.TextBox
 $logBox.Location = New-Point 18 376
-$logBox.Size = New-Size 754 154
+$logBox.Size = New-Size 754 112
 $logBox.Anchor = 'Top, Bottom, Left, Right'
 $logBox.Multiline = $true
 $logBox.ScrollBars = 'Both'
@@ -685,6 +715,44 @@ $logBox.ReadOnly = $true
 $logBox.Font = New-Object System.Drawing.Font('Consolas', 9)
 Set-TextBoxTheme -TextBox $logBox
 $contentPanel.Controls.Add($logBox)
+
+$consoleInputLabel = New-Object System.Windows.Forms.Label
+$consoleInputLabel.Text = 'Input'
+$consoleInputLabel.Location = New-Point 18 511
+$consoleInputLabel.Size = New-Size 48 22
+$consoleInputLabel.Anchor = 'Bottom, Left'
+$consoleInputLabel.ForeColor = $script:colors.Text
+$consoleInputLabel.BackColor = $script:colors.Panel
+$consoleInputLabel.Visible = $false
+$contentPanel.Controls.Add($consoleInputLabel)
+
+$consoleInputBox = New-Object System.Windows.Forms.TextBox
+$consoleInputBox.Location = New-Point 76 506
+$consoleInputBox.Size = New-Size 578 26
+$consoleInputBox.Anchor = 'Bottom, Left, Right'
+$consoleInputBox.Enabled = $false
+$consoleInputBox.Visible = $false
+$consoleInputBox.Add_KeyDown({
+    param($sender, $eventArgs)
+
+    if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
+        $eventArgs.SuppressKeyPress = $true
+        Send-ConsoleInput
+    }
+})
+Set-TextBoxTheme -TextBox $consoleInputBox
+$contentPanel.Controls.Add($consoleInputBox)
+
+$sendInputButton = New-Object System.Windows.Forms.Button
+$sendInputButton.Text = 'Send'
+$sendInputButton.Location = New-Point 666 503
+$sendInputButton.Size = New-Size 106 32
+$sendInputButton.Anchor = 'Bottom, Right'
+$sendInputButton.Enabled = $false
+$sendInputButton.Visible = $false
+$sendInputButton.Add_Click({ Send-ConsoleInput })
+Set-ButtonTheme -Button $sendInputButton -Primary
+$contentPanel.Controls.Add($sendInputButton)
 
 $statusLabel = New-Object System.Windows.Forms.Label
 $statusLabel.Text = 'Ready.'
