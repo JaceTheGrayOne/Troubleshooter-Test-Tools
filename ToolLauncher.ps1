@@ -47,24 +47,24 @@ $script:colors = @{
     Teal = [System.Drawing.ColorTranslator]::FromHtml('#37b9ad')
 }
 
-function New-Point {
+function Get-Point {
     param([int]$X, [int]$Y)
     New-Object System.Drawing.Point($X, $Y)
 }
 
-function New-Size {
+function Get-Size {
     param([int]$Width, [int]$Height)
     New-Object System.Drawing.Size($Width, $Height)
 }
 
-function Set-ControlTheme {
+function Use-ControlTheme {
     param([Parameter(Mandatory)][System.Windows.Forms.Control]$Control)
 
     $Control.BackColor = $script:colors.Control
     $Control.ForeColor = $script:colors.Text
 }
 
-function Set-ButtonTheme {
+function Use-ButtonTheme {
     param(
         [Parameter(Mandatory)][System.Windows.Forms.Button]$Button,
         [switch]$Primary
@@ -77,7 +77,7 @@ function Set-ButtonTheme {
     $Button.ForeColor = $script:colors.Text
 }
 
-function Set-TextBoxTheme {
+function Use-TextBoxTheme {
     param([Parameter(Mandatory)][System.Windows.Forms.TextBox]$TextBox)
 
     $TextBox.BackColor = $script:colors.Control
@@ -132,7 +132,7 @@ function Get-SavedFieldValue {
     return $Field.default
 }
 
-function Save-CurrentFieldValues {
+function Save-CurrentFieldState {
     if (-not $script:currentTool) {
         return
     }
@@ -163,8 +163,8 @@ function Save-CurrentFieldValues {
     }
 }
 
-function Get-CurrentFieldValues {
-    Save-CurrentFieldValues
+function Get-CurrentFieldState {
+    Save-CurrentFieldState
 
     $values = @{}
     if (-not $script:currentTool) {
@@ -179,7 +179,7 @@ function Get-CurrentFieldValues {
     return $values
 }
 
-function Set-ToolEditorEnabled {
+function Use-ToolEditorState {
     param([bool]$Enabled)
 
     foreach ($entry in $script:fieldControls.Values) {
@@ -190,7 +190,7 @@ function Set-ToolEditorEnabled {
     $stopButton.Enabled = -not $Enabled
 }
 
-function Refresh-ConsoleInputState {
+function Show-ConsoleInputState {
     $isInteractive = Test-ToolInteractiveInput -Tool $script:currentTool
     $run = Get-CurrentToolRun
     $isRunning = Test-ToolRunActive -Run $run
@@ -225,12 +225,12 @@ function Get-RunStateText {
     return 'Stopped'
 }
 
-function Refresh-StatusForCurrentTool {
+function Show-CurrentToolStatus {
     if (-not $script:currentTool) {
         $toolTitleLabel.Text = 'No tool selected'
         $toolDescriptionLabel.Text = ''
         $runStateLabel.Text = 'Idle'
-        Set-ToolEditorEnabled -Enabled $false
+        Use-ToolEditorState -Enabled $false
         return
     }
 
@@ -239,11 +239,11 @@ function Refresh-StatusForCurrentTool {
 
     $runStateLabel.Text = Get-RunStateText -Run $run
     $runStateLabel.ForeColor = if ($isRunning) { $script:colors.Teal } else { $script:colors.Muted }
-    Set-ToolEditorEnabled -Enabled (-not $isRunning)
-    Refresh-ConsoleInputState
+    Use-ToolEditorState -Enabled (-not $isRunning)
+    Show-ConsoleInputState
 }
 
-function Refresh-LogView {
+function Show-LogView {
     $run = Get-CurrentToolRun
     if (-not $run -or [string]::IsNullOrWhiteSpace($run.LogPath)) {
         if ($script:lastRenderedLogPath) {
@@ -279,7 +279,7 @@ function Refresh-LogView {
     }
 }
 
-function Render-Field {
+function Show-FieldControl {
     param(
         [Parameter(Mandatory)]$Tool,
         [Parameter(Mandatory)]$Field,
@@ -291,8 +291,8 @@ function Render-Field {
     $label.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
     $label.ForeColor = $script:colors.Text
     $label.BackColor = $script:colors.Surface
-    $label.Location = New-Point 18 $Y
-    $label.Size = New-Size 220 22
+    $label.Location = Get-Point 18 $Y
+    $label.Size = Get-Size 220 22
     $fieldsPanel.Controls.Add($label)
 
     $fieldType = [string]$Field.type
@@ -305,17 +305,17 @@ function Render-Field {
             $control.Minimum = if ($null -ne $Field.minimum) { [decimal]$Field.minimum } else { 0 }
             $control.Maximum = if ($null -ne $Field.maximum) { [decimal]$Field.maximum } else { 999999 }
             $control.Value = [decimal]$savedValue
-            $control.Location = New-Point 250 ($Y - 3)
-            $control.Size = New-Size 120 26
-            Set-ControlTheme -Control $control
+            $control.Location = Get-Point 250 ($Y - 3)
+            $control.Size = Get-Size 120 26
+            Use-ControlTheme -Control $control
         }
 
         'checkbox' {
             $control = New-Object System.Windows.Forms.CheckBox
             $control.Checked = [bool]$savedValue
             $control.Text = 'Enabled'
-            $control.Location = New-Point 250 ($Y - 2)
-            $control.Size = New-Size 130 26
+            $control.Location = Get-Point 250 ($Y - 2)
+            $control.Size = Get-Size 130 26
             $control.BackColor = $script:colors.Surface
             $control.ForeColor = $script:colors.Text
         }
@@ -330,28 +330,28 @@ function Render-Field {
                 $selectedIndex = $control.Items.IndexOf([string]$savedValue)
                 $control.SelectedIndex = if ($selectedIndex -ge 0) { $selectedIndex } else { 0 }
             }
-            $control.Location = New-Point 250 ($Y - 3)
-            $control.Size = New-Size 260 26
-            Set-ControlTheme -Control $control
+            $control.Location = Get-Point 250 ($Y - 3)
+            $control.Size = Get-Size 260 26
+            Use-ControlTheme -Control $control
         }
 
         'password' {
             $control = New-Object System.Windows.Forms.TextBox
             $control.Text = [string]$savedValue
             $control.UseSystemPasswordChar = $true
-            $control.Location = New-Point 250 ($Y - 3)
-            $control.Size = New-Size 420 26
+            $control.Location = Get-Point 250 ($Y - 3)
+            $control.Size = Get-Size 420 26
             $control.Anchor = 'Top, Left, Right'
-            Set-TextBoxTheme -TextBox $control
+            Use-TextBoxTheme -TextBox $control
         }
 
         default {
             $control = New-Object System.Windows.Forms.TextBox
             $control.Text = [string]$savedValue
-            $control.Location = New-Point 250 ($Y - 3)
-            $control.Size = New-Size 420 26
+            $control.Location = Get-Point 250 ($Y - 3)
+            $control.Size = Get-Size 420 26
             $control.Anchor = 'Top, Left, Right'
-            Set-TextBoxTheme -TextBox $control
+            Use-TextBoxTheme -TextBox $control
         }
     }
 
@@ -360,8 +360,8 @@ function Render-Field {
         $helpLabel.Text = [string]$Field.help
         $helpLabel.ForeColor = $script:colors.Muted
         $helpLabel.BackColor = $script:colors.Surface
-        $helpLabel.Location = New-Point 18 ($Y + 24)
-        $helpLabel.Size = New-Size 650 18
+        $helpLabel.Location = Get-Point 18 ($Y + 24)
+        $helpLabel.Size = Get-Size 650 18
         $helpLabel.Anchor = 'Top, Left, Right'
         $fieldsPanel.Controls.Add($helpLabel)
         $rowHeight = 58
@@ -379,7 +379,7 @@ function Render-Field {
     return $Y + $rowHeight
 }
 
-function Render-Tool {
+function Show-Tool {
     param([Parameter(Mandatory)]$Tool)
 
     $script:currentTool = $Tool
@@ -391,24 +391,24 @@ function Render-Tool {
 
     $y = 18
     foreach ($field in @($Tool.fields)) {
-        $y = Render-Field -Tool $Tool -Field $field -Y $y
+        $y = Show-FieldControl -Tool $Tool -Field $field -Y $y
     }
 
     if (@($Tool.fields).Count -eq 0) {
         $emptyLabel = New-Object System.Windows.Forms.Label
         $emptyLabel.Text = 'No configurable fields.'
-        $emptyLabel.Location = New-Point 18 18
-        $emptyLabel.Size = New-Size 300 22
+        $emptyLabel.Location = Get-Point 18 18
+        $emptyLabel.Size = Get-Size 300 22
         $emptyLabel.ForeColor = $script:colors.Muted
         $emptyLabel.BackColor = $script:colors.Surface
         $fieldsPanel.Controls.Add($emptyLabel)
     }
 
-    Refresh-StatusForCurrentTool
-    Refresh-LogView
+    Show-CurrentToolStatus
+    Show-LogView
 }
 
-function Load-ToolCatalog {
+function Import-ToolCatalog {
     try {
         $script:tools = @(Get-ToolDefinitions -CatalogPath $script:catalogPath)
     }
@@ -426,16 +426,16 @@ function Load-ToolCatalog {
 
     if ($script:tools.Count -gt 0) {
         $toolList.SelectedIndex = 0
-        Render-Tool -Tool $script:tools[0]
+        Show-Tool -Tool $script:tools[0]
     }
     else {
         $script:currentTool = $null
         $fieldsPanel.Controls.Clear()
-        Refresh-StatusForCurrentTool
+        Show-CurrentToolStatus
     }
 }
 
-function Start-SelectedTool {
+function Invoke-SelectedTool {
     if (-not $script:currentTool) {
         return
     }
@@ -445,7 +445,7 @@ function Start-SelectedTool {
         return
     }
 
-    $values = Get-CurrentFieldValues
+    $values = Get-CurrentFieldState
 
     try {
         $run = Start-ConfiguredTool `
@@ -458,8 +458,8 @@ function Start-SelectedTool {
         $script:lastRenderedLogPath = $null
         $script:lastRenderedLogText = ''
         $statusLabel.Text = 'Running {0}. Log: {1}' -f $script:currentTool.name, $run.LogPath
-        Refresh-StatusForCurrentTool
-        Refresh-LogView
+        Show-CurrentToolStatus
+        Show-LogView
     }
     catch {
         $statusLabel.Text = 'Run failed.'
@@ -467,7 +467,7 @@ function Start-SelectedTool {
     }
 }
 
-function Stop-SelectedTool {
+function Invoke-SelectedToolStop {
     $run = Get-CurrentToolRun
     if (-not $run) {
         return
@@ -482,8 +482,8 @@ function Stop-SelectedTool {
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Stop Failed', 'OK', 'Error') | Out-Null
     }
     finally {
-        Refresh-StatusForCurrentTool
-        Refresh-LogView
+        Show-CurrentToolStatus
+        Show-LogView
     }
 }
 
@@ -504,20 +504,20 @@ function Send-ConsoleInput {
     }
 }
 
-function Update-RunningTools {
+function Sync-RunningTool {
     foreach ($toolId in @($script:toolRuns.Keys)) {
         $run = $script:toolRuns[$toolId]
-        if ($run.Process -and $run.ExitCode -eq $null -and $run.Process.HasExited) {
+        if ($run.Process -and $null -eq $run.ExitCode -and $run.Process.HasExited) {
             $run.ExitCode = $run.Process.ExitCode
             $run.EndedAt = Get-Date
         }
     }
 
-    Refresh-StatusForCurrentTool
-    Refresh-LogView
+    Show-CurrentToolStatus
+    Show-LogView
 }
 
-function Confirm-CloseRunningTools {
+function Confirm-RunningToolClose {
     if (-not (Test-AnyToolRunning)) {
         return $true
     }
@@ -545,14 +545,14 @@ function Confirm-CloseRunningTools {
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Troubleshooter Test Tools'
 $form.StartPosition = 'CenterScreen'
-$form.MinimumSize = New-Size 980 640
-$form.Size = New-Size 1120 740
+$form.MinimumSize = Get-Size 980 640
+$form.Size = Get-Size 1120 740
 $form.BackColor = $script:colors.Window
 $form.ForeColor = $script:colors.Text
 
 $topPanel = New-Object System.Windows.Forms.Panel
-$topPanel.Location = New-Point 16 14
-$topPanel.Size = New-Size 1070 80
+$topPanel.Location = Get-Point 16 14
+$topPanel.Size = Get-Size 1070 80
 $topPanel.Anchor = 'Top, Left, Right'
 $topPanel.BackColor = $script:colors.Panel
 $topPanel.BorderStyle = 'FixedSingle'
@@ -561,15 +561,15 @@ $form.Controls.Add($topPanel)
 $appTitleLabel = New-Object System.Windows.Forms.Label
 $appTitleLabel.Text = 'Troubleshooter Test Tools'
 $appTitleLabel.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
-$appTitleLabel.Location = New-Point 16 13
-$appTitleLabel.Size = New-Size 360 30
+$appTitleLabel.Location = Get-Point 16 13
+$appTitleLabel.Size = Get-Size 360 30
 $appTitleLabel.ForeColor = $script:colors.Text
 $appTitleLabel.BackColor = $script:colors.Panel
 $topPanel.Controls.Add($appTitleLabel)
 
 $navPanel = New-Object System.Windows.Forms.Panel
-$navPanel.Location = New-Point 16 108
-$navPanel.Size = New-Size 260 552
+$navPanel.Location = Get-Point 16 108
+$navPanel.Size = Get-Size 260 552
 $navPanel.Anchor = 'Top, Bottom, Left'
 $navPanel.BackColor = $script:colors.Panel
 $navPanel.BorderStyle = 'FixedSingle'
@@ -578,15 +578,15 @@ $form.Controls.Add($navPanel)
 $navLabel = New-Object System.Windows.Forms.Label
 $navLabel.Text = 'Tools'
 $navLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
-$navLabel.Location = New-Point 14 14
-$navLabel.Size = New-Size 200 24
+$navLabel.Location = Get-Point 14 14
+$navLabel.Size = Get-Size 200 24
 $navLabel.BackColor = $script:colors.Panel
 $navLabel.ForeColor = $script:colors.Text
 $navPanel.Controls.Add($navLabel)
 
 $toolList = New-Object System.Windows.Forms.ListBox
-$toolList.Location = New-Point 14 48
-$toolList.Size = New-Size 230 486
+$toolList.Location = Get-Point 14 48
+$toolList.Size = Get-Size 230 486
 $toolList.Anchor = 'Top, Bottom, Left, Right'
 $toolList.BackColor = $script:colors.Control
 $toolList.ForeColor = $script:colors.Text
@@ -597,14 +597,14 @@ $toolList.Add_SelectedIndexChanged({
         return
     }
 
-    Save-CurrentFieldValues
-    Render-Tool -Tool $script:tools[$toolList.SelectedIndex]
+    Save-CurrentFieldState
+    Show-Tool -Tool $script:tools[$toolList.SelectedIndex]
 })
 $navPanel.Controls.Add($toolList)
 
 $contentPanel = New-Object System.Windows.Forms.Panel
-$contentPanel.Location = New-Point 292 108
-$contentPanel.Size = New-Size 794 552
+$contentPanel.Location = Get-Point 292 108
+$contentPanel.Size = Get-Size 794 552
 $contentPanel.Anchor = 'Top, Bottom, Left, Right'
 $contentPanel.BackColor = $script:colors.Panel
 $contentPanel.BorderStyle = 'FixedSingle'
@@ -613,8 +613,8 @@ $form.Controls.Add($contentPanel)
 $toolTitleLabel = New-Object System.Windows.Forms.Label
 $toolTitleLabel.Text = 'Tool'
 $toolTitleLabel.Font = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
-$toolTitleLabel.Location = New-Point 18 16
-$toolTitleLabel.Size = New-Size 460 34
+$toolTitleLabel.Location = Get-Point 18 16
+$toolTitleLabel.Size = Get-Size 460 34
 $toolTitleLabel.Anchor = 'Top, Left, Right'
 $toolTitleLabel.ForeColor = $script:colors.Text
 $toolTitleLabel.BackColor = $script:colors.Panel
@@ -624,8 +624,8 @@ $runStateLabel = New-Object System.Windows.Forms.Label
 $runStateLabel.Text = 'Idle'
 $runStateLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
 $runStateLabel.TextAlign = 'MiddleRight'
-$runStateLabel.Location = New-Point 580 21
-$runStateLabel.Size = New-Size 190 24
+$runStateLabel.Location = Get-Point 580 21
+$runStateLabel.Size = Get-Size 190 24
 $runStateLabel.Anchor = 'Top, Right'
 $runStateLabel.ForeColor = $script:colors.Muted
 $runStateLabel.BackColor = $script:colors.Panel
@@ -633,16 +633,16 @@ $contentPanel.Controls.Add($runStateLabel)
 
 $toolDescriptionLabel = New-Object System.Windows.Forms.Label
 $toolDescriptionLabel.Text = ''
-$toolDescriptionLabel.Location = New-Point 20 52
-$toolDescriptionLabel.Size = New-Size 750 38
+$toolDescriptionLabel.Location = Get-Point 20 52
+$toolDescriptionLabel.Size = Get-Size 750 38
 $toolDescriptionLabel.Anchor = 'Top, Left, Right'
 $toolDescriptionLabel.ForeColor = $script:colors.Muted
 $toolDescriptionLabel.BackColor = $script:colors.Panel
 $contentPanel.Controls.Add($toolDescriptionLabel)
 
 $fieldsPanel = New-Object System.Windows.Forms.Panel
-$fieldsPanel.Location = New-Point 18 104
-$fieldsPanel.Size = New-Size 754 176
+$fieldsPanel.Location = Get-Point 18 104
+$fieldsPanel.Size = Get-Size 754 176
 $fieldsPanel.Anchor = 'Top, Left, Right'
 $fieldsPanel.BackColor = $script:colors.Surface
 $fieldsPanel.BorderStyle = 'FixedSingle'
@@ -651,37 +651,37 @@ $contentPanel.Controls.Add($fieldsPanel)
 
 $startButton = New-Object System.Windows.Forms.Button
 $startButton.Text = 'Run'
-$startButton.Location = New-Point 18 296
-$startButton.Size = New-Size 96 34
-$startButton.Add_Click({ Start-SelectedTool })
-Set-ButtonTheme -Button $startButton -Primary
+$startButton.Location = Get-Point 18 296
+$startButton.Size = Get-Size 96 34
+$startButton.Add_Click({ Invoke-SelectedTool })
+Use-ButtonTheme -Button $startButton -Primary
 $contentPanel.Controls.Add($startButton)
 
 $stopButton = New-Object System.Windows.Forms.Button
 $stopButton.Text = 'Stop'
-$stopButton.Location = New-Point 126 296
-$stopButton.Size = New-Size 96 34
-$stopButton.Add_Click({ Stop-SelectedTool })
-Set-ButtonTheme -Button $stopButton
+$stopButton.Location = Get-Point 126 296
+$stopButton.Size = Get-Size 96 34
+$stopButton.Add_Click({ Invoke-SelectedToolStop })
+Use-ButtonTheme -Button $stopButton
 $contentPanel.Controls.Add($stopButton)
 
 $openLogsButton = New-Object System.Windows.Forms.Button
 $openLogsButton.Text = 'Open Logs'
-$openLogsButton.Location = New-Point 234 296
-$openLogsButton.Size = New-Size 106 34
+$openLogsButton.Location = Get-Point 234 296
+$openLogsButton.Size = Get-Size 106 34
 $openLogsButton.Add_Click({
     if (-not (Test-Path -LiteralPath $script:logsPath)) {
         $null = New-Item -ItemType Directory -Path $script:logsPath -Force
     }
     Start-Process explorer.exe -ArgumentList ('"{0}"' -f $script:logsPath)
 })
-Set-ButtonTheme -Button $openLogsButton
+Use-ButtonTheme -Button $openLogsButton
 $contentPanel.Controls.Add($openLogsButton)
 
 $clearLogButton = New-Object System.Windows.Forms.Button
 $clearLogButton.Text = 'Clear View'
-$clearLogButton.Location = New-Point 352 296
-$clearLogButton.Size = New-Size 100 34
+$clearLogButton.Location = Get-Point 352 296
+$clearLogButton.Size = Get-Size 100 34
 $clearLogButton.Add_Click({
     $run = Get-CurrentToolRun
     if ($run -and -not [string]::IsNullOrWhiteSpace($run.LogPath)) {
@@ -692,34 +692,34 @@ $clearLogButton.Add_Click({
     $script:lastRenderedLogText = ''
     $logBox.Clear()
 })
-Set-ButtonTheme -Button $clearLogButton
+Use-ButtonTheme -Button $clearLogButton
 $contentPanel.Controls.Add($clearLogButton)
 
 $logLabel = New-Object System.Windows.Forms.Label
 $logLabel.Text = 'Console Output'
 $logLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
-$logLabel.Location = New-Point 18 348
-$logLabel.Size = New-Size 120 24
+$logLabel.Location = Get-Point 18 348
+$logLabel.Size = Get-Size 120 24
 $logLabel.ForeColor = $script:colors.Text
 $logLabel.BackColor = $script:colors.Panel
 $contentPanel.Controls.Add($logLabel)
 
 $logBox = New-Object System.Windows.Forms.TextBox
-$logBox.Location = New-Point 18 376
-$logBox.Size = New-Size 754 112
+$logBox.Location = Get-Point 18 376
+$logBox.Size = Get-Size 754 112
 $logBox.Anchor = 'Top, Bottom, Left, Right'
 $logBox.Multiline = $true
 $logBox.ScrollBars = 'Both'
 $logBox.WordWrap = $false
 $logBox.ReadOnly = $true
 $logBox.Font = New-Object System.Drawing.Font('Consolas', 9)
-Set-TextBoxTheme -TextBox $logBox
+Use-TextBoxTheme -TextBox $logBox
 $contentPanel.Controls.Add($logBox)
 
 $consoleInputLabel = New-Object System.Windows.Forms.Label
 $consoleInputLabel.Text = 'Input'
-$consoleInputLabel.Location = New-Point 18 511
-$consoleInputLabel.Size = New-Size 48 22
+$consoleInputLabel.Location = Get-Point 18 511
+$consoleInputLabel.Size = Get-Size 48 22
 $consoleInputLabel.Anchor = 'Bottom, Left'
 $consoleInputLabel.ForeColor = $script:colors.Text
 $consoleInputLabel.BackColor = $script:colors.Panel
@@ -727,37 +727,39 @@ $consoleInputLabel.Visible = $false
 $contentPanel.Controls.Add($consoleInputLabel)
 
 $consoleInputBox = New-Object System.Windows.Forms.TextBox
-$consoleInputBox.Location = New-Point 76 506
-$consoleInputBox.Size = New-Size 578 26
+$consoleInputBox.Location = Get-Point 76 506
+$consoleInputBox.Size = Get-Size 578 26
 $consoleInputBox.Anchor = 'Bottom, Left, Right'
 $consoleInputBox.Enabled = $false
 $consoleInputBox.Visible = $false
 $consoleInputBox.Add_KeyDown({
-    param($sender, $eventArgs)
+    param($controlSender, $keyEventArgs)
 
-    if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
-        $eventArgs.SuppressKeyPress = $true
+    [void]$controlSender
+
+    if ($keyEventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
+        $keyEventArgs.SuppressKeyPress = $true
         Send-ConsoleInput
     }
 })
-Set-TextBoxTheme -TextBox $consoleInputBox
+Use-TextBoxTheme -TextBox $consoleInputBox
 $contentPanel.Controls.Add($consoleInputBox)
 
 $sendInputButton = New-Object System.Windows.Forms.Button
 $sendInputButton.Text = 'Send'
-$sendInputButton.Location = New-Point 666 503
-$sendInputButton.Size = New-Size 106 32
+$sendInputButton.Location = Get-Point 666 503
+$sendInputButton.Size = Get-Size 106 32
 $sendInputButton.Anchor = 'Bottom, Right'
 $sendInputButton.Enabled = $false
 $sendInputButton.Visible = $false
 $sendInputButton.Add_Click({ Send-ConsoleInput })
-Set-ButtonTheme -Button $sendInputButton -Primary
+Use-ButtonTheme -Button $sendInputButton -Primary
 $contentPanel.Controls.Add($sendInputButton)
 
 $statusLabel = New-Object System.Windows.Forms.Label
 $statusLabel.Text = 'Ready.'
-$statusLabel.Location = New-Point 18 674
-$statusLabel.Size = New-Size 1068 24
+$statusLabel.Location = Get-Point 18 674
+$statusLabel.Size = Get-Size 1068 24
 $statusLabel.Anchor = 'Bottom, Left, Right'
 $statusLabel.ForeColor = $script:colors.Muted
 $statusLabel.BackColor = $script:colors.Window
@@ -765,17 +767,19 @@ $form.Controls.Add($statusLabel)
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 1000
-$timer.Add_Tick({ Update-RunningTools })
+$timer.Add_Tick({ Sync-RunningTool })
 $timer.Start()
 
 $form.Add_FormClosing({
-    param($sender, $eventArgs)
+    param($formSender, $formClosingEventArgs)
 
-    if (-not (Confirm-CloseRunningTools)) {
-        $eventArgs.Cancel = $true
+    [void]$formSender
+
+    if (-not (Confirm-RunningToolClose)) {
+        $formClosingEventArgs.Cancel = $true
     }
 })
 
-Load-ToolCatalog
+Import-ToolCatalog
 
 [void][System.Windows.Forms.Application]::Run($form)
