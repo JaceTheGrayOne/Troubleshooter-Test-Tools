@@ -41,6 +41,10 @@ function Get-ToolDefinitions {
             throw "Tool '$($tool.id)' is missing a script path."
         }
 
+        if ($tool.PSObject.Properties.Name -contains 'presetsPath' -and [string]::IsNullOrWhiteSpace($tool.presetsPath)) {
+            throw "Tool '$($tool.id)' has an empty presetsPath."
+        }
+
         foreach ($field in @($tool.fields)) {
             if ([string]::IsNullOrWhiteSpace($field.name)) {
                 throw "Tool '$($tool.id)' has a field without a name."
@@ -65,6 +69,49 @@ function Resolve-ToolPath {
     }
 
     return Join-Path $RootPath $Path
+}
+
+function Get-ToolPresets {
+    param(
+        [Parameter(Mandatory)][string]$RootPath,
+        [Parameter(Mandatory)]$Tool
+    )
+
+    if (-not ($Tool.PSObject.Properties.Name -contains 'presetsPath') -or [string]::IsNullOrWhiteSpace($Tool.presetsPath)) {
+        return @()
+    }
+
+    $presetsPath = Resolve-ToolPath -RootPath $RootPath -Path ([string]$Tool.presetsPath)
+    if (-not (Test-Path -LiteralPath $presetsPath)) {
+        throw "Tool preset file not found: $presetsPath"
+    }
+
+    $presetCatalog = Get-Content -Raw -LiteralPath $presetsPath | ConvertFrom-Json
+    if (-not $presetCatalog.presets) {
+        throw "Tool preset file has no 'presets' array: $presetsPath"
+    }
+
+    $ids = @{}
+    foreach ($preset in @($presetCatalog.presets)) {
+        if ([string]::IsNullOrWhiteSpace($preset.id)) {
+            throw "A preset in '$presetsPath' is missing an id."
+        }
+
+        if ($ids.ContainsKey($preset.id)) {
+            throw "Duplicate preset id '$($preset.id)' in '$presetsPath'."
+        }
+        $ids[$preset.id] = $true
+
+        if ([string]::IsNullOrWhiteSpace($preset.label)) {
+            throw "Preset '$($preset.id)' in '$presetsPath' is missing a label."
+        }
+
+        if (-not $preset.values) {
+            throw "Preset '$($preset.id)' in '$presetsPath' has no values object."
+        }
+
+        $preset
+    }
 }
 
 function ConvertTo-PowerShellLiteral {
@@ -117,7 +164,13 @@ function New-PowerShellWorkerCommand {
     $parts = @('& {0}' -f (ConvertTo-PowerShellLiteral -Value $ScriptPath))
 
     foreach ($field in @($Tool.fields)) {
-        $value = $FieldValues[$field.name]
+        if ($FieldValues.ContainsKey($field.name)) {
+            $value = $FieldValues[$field.name]
+        }
+        else {
+            $value = $field.default
+        }
+
         $parts += '-{0} {1}' -f $field.name, (ConvertTo-PowerShellLiteral -Value $value)
     }
 

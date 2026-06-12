@@ -42,6 +42,7 @@ $script:tools = @()
 $script:toolRuns = @{}
 $script:toolValues = @{}
 $script:fieldControls = @{}
+$script:suppressFieldEvents = $false
 $script:currentTool = $null
 $script:lastRenderedLogPath = $null
 $script:lastRenderedLogText = ''
@@ -194,6 +195,112 @@ function Get-SavedFieldValue {
     return $Field.default
 }
 
+function Get-ToolFieldByName {
+    param(
+        [Parameter(Mandatory)]$Tool,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    foreach ($field in @($Tool.fields)) {
+        if ([string]$field.name -eq $FieldName) {
+            return $field
+        }
+    }
+
+    return $null
+}
+
+function Set-SavedFieldValue {
+    param(
+        [Parameter(Mandatory)]$Tool,
+        [Parameter(Mandatory)][string]$FieldName,
+        [AllowNull()]$Value
+    )
+
+    $field = Get-ToolFieldByName -Tool $Tool -FieldName $FieldName
+    if (-not $field) {
+        return
+    }
+
+    $key = Get-FieldKey -Tool $Tool -Field $field
+    $script:toolValues[$key] = $Value
+}
+
+function Initialize-ToolFieldValues {
+    param([Parameter(Mandatory)]$Tool)
+
+    foreach ($field in @($Tool.fields)) {
+        $key = Get-FieldKey -Tool $Tool -Field $field
+        if (-not $script:toolValues.ContainsKey($key)) {
+            $script:toolValues[$key] = $field.default
+        }
+    }
+}
+
+function Get-ControlFieldValue {
+    param(
+        [Parameter(Mandatory)]$Field,
+        [Parameter(Mandatory)][System.Windows.Forms.Control]$Control
+    )
+
+    switch ([string]$Field.type) {
+        'number' { return [int]$Control.Value }
+        'checkbox' { return [bool]$Control.Checked }
+        'choice' { return [string]$Control.SelectedItem }
+        default { return [string]$Control.Text }
+    }
+}
+
+function Get-CurrentFieldValueOrDefault {
+    param(
+        [Parameter(Mandatory)]$Tool,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($script:fieldControls.ContainsKey($FieldName)) {
+        $entry = $script:fieldControls[$FieldName]
+        return Get-ControlFieldValue -Field $entry.Field -Control $entry.Control
+    }
+
+    $field = Get-ToolFieldByName -Tool $Tool -FieldName $FieldName
+    if (-not $field) {
+        return $null
+    }
+
+    return Get-SavedFieldValue -Tool $Tool -Field $field
+}
+
+function Test-FieldVisible {
+    param(
+        [Parameter(Mandatory)]$Tool,
+        [Parameter(Mandatory)]$Field
+    )
+
+    if ([string]$Field.type -eq 'hidden') {
+        return $false
+    }
+
+    if (-not $Field.visibleWhen) {
+        return $true
+    }
+
+    foreach ($condition in @($Field.visibleWhen.PSObject.Properties)) {
+        $actual = Get-CurrentFieldValueOrDefault -Tool $Tool -FieldName $condition.Name
+        $expected = $condition.Value
+
+        if ($expected -is [System.Array]) {
+            if ([string]$actual -notin @($expected | ForEach-Object { [string]$_ })) {
+                return $false
+            }
+        }
+        elseif ([string]$actual -ne [string]$expected) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function Save-CurrentFieldState {
     if (-not $script:currentTool) {
         return
@@ -205,12 +312,7 @@ function Save-CurrentFieldState {
         $control = $entry.Control
         $key = Get-FieldKey -Tool $script:currentTool -Field $field
 
-        $script:toolValues[$key] = switch ([string]$field.type) {
-            'number' { [int]$control.Value }
-            'checkbox' { [bool]$control.Checked }
-            'choice' { [string]$control.SelectedItem }
-            default { [string]$control.Text }
-        }
+        $script:toolValues[$key] = Get-ControlFieldValue -Field $field -Control $control
     }
 }
 
@@ -223,8 +325,7 @@ function Get-CurrentFieldState {
     }
 
     foreach ($field in @($script:currentTool.fields)) {
-        $key = Get-FieldKey -Tool $script:currentTool -Field $field
-        $values[$field.name] = $script:toolValues[$key]
+        $values[$field.name] = Get-SavedFieldValue -Tool $script:currentTool -Field $field
     }
 
     return $values
@@ -235,6 +336,10 @@ function Use-ToolEditorState {
 
     foreach ($entry in $script:fieldControls.Values) {
         $entry.Control.Enabled = $Enabled
+    }
+
+    if ($presetsPanel) {
+        $presetsPanel.Enabled = $Enabled
     }
 
     $startButton.Enabled = $Enabled -and ($null -ne $script:currentTool)
@@ -330,6 +435,110 @@ function Show-LogView {
     }
 }
 
+function Invoke-ProtocolSelectionChanged {
+    if ($script:suppressFieldEvents -or -not $script:currentTool) {
+        return
+    }
+
+    $protocol = Get-CurrentFieldValueOrDefault -Tool $script:currentTool -FieldName 'Protocol'
+    Save-CurrentFieldState
+    Set-SavedFieldValue -Tool $script:currentTool -FieldName 'PresetId' -Value ''
+    Set-SavedFieldValue -Tool $script:currentTool -FieldName 'Action' -Value ''
+
+    $statusLabel.Text = 'Protocol changed to {0}.' -f $protocol
+    Show-Tool -Tool $script:currentTool
+}
+
+function Apply-ToolPreset {
+    param([Parameter(Mandatory)]$Preset)
+
+    if (-not $script:currentTool) {
+        return
+    }
+
+    Save-CurrentFieldState
+
+    foreach ($property in @($Preset.values.PSObject.Properties)) {
+        Set-SavedFieldValue -Tool $script:currentTool -FieldName $property.Name -Value $property.Value
+    }
+
+    if ($Preset.PSObject.Properties.Name -contains 'id') {
+        Set-SavedFieldValue -Tool $script:currentTool -FieldName 'PresetId' -Value ([string]$Preset.id)
+    }
+
+    if ($Preset.PSObject.Properties.Name -contains 'protocol') {
+        Set-SavedFieldValue -Tool $script:currentTool -FieldName 'Protocol' -Value ([string]$Preset.protocol)
+    }
+
+    if ($Preset.PSObject.Properties.Name -contains 'action') {
+        Set-SavedFieldValue -Tool $script:currentTool -FieldName 'Action' -Value ([string]$Preset.action)
+    }
+
+    $statusLabel.Text = 'Applied preset {0}.' -f $Preset.label
+    Show-Tool -Tool $script:currentTool
+}
+
+function Show-PresetButtons {
+    param([Parameter(Mandatory)]$Tool)
+
+    $presetsPanel.Controls.Clear()
+    $presetsPanel.Visible = $false
+
+    if (-not ($Tool.PSObject.Properties.Name -contains 'presetsPath') -or [string]::IsNullOrWhiteSpace($Tool.presetsPath)) {
+        return
+    }
+
+    $presetsPanel.Visible = $true
+
+    $null = Add-UiControl -Parent $presetsPanel -Type Label -Bounds @(12, 12, 170, 22) -Properties @{
+        Text = 'Presets'
+        Font = $script:fonts.Section
+        BackColor = $script:colors.Surface
+    }
+
+    try {
+        $presets = @(Get-ToolPresets -RootPath $script:rootPath -Tool $Tool)
+    }
+    catch {
+        $null = Add-UiControl -Parent $presetsPanel -Type Label -Bounds @(12, 42, 170, 74) -Properties @{
+            Text = $_.Exception.Message
+            ForeColor = $script:colors.Muted
+            BackColor = $script:colors.Surface
+        }
+        return
+    }
+
+    $y = 44
+    foreach ($preset in $presets) {
+        $button = Add-UiControl -Parent $presetsPanel -Type Button -Bounds @(12, $y, 166, 32) -Properties @{
+            Text = [string]$preset.label
+            Tag = $preset
+            Anchor = 'Top, Left, Right'
+        } -Setup {
+            param($control)
+            $control.Add_Click({
+                param($sender, $eventArgs)
+                [void]$eventArgs
+                Apply-ToolPreset -Preset $sender.Tag
+            })
+        }
+
+        [void]$button
+
+        if ($preset.description) {
+            $null = Add-UiControl -Parent $presetsPanel -Type Label -Bounds @(12, ($y + 36), 166, 34) -Properties @{
+                Text = [string]$preset.description
+                ForeColor = $script:colors.Muted
+                BackColor = $script:colors.Surface
+            }
+            $y += 82
+        }
+        else {
+            $y += 42
+        }
+    }
+}
+
 function Show-FieldControl {
     param(
         [Parameter(Mandatory)]$Tool,
@@ -337,7 +546,7 @@ function Show-FieldControl {
         [Parameter(Mandatory)][int]$Y
     )
 
-    $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, $Y, 220, 22) -Properties @{
+    $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, $Y, 178, 22) -Properties @{
         Text = [string]$Field.label
         Font = $script:fonts.Field
         BackColor = $script:colors.Surface
@@ -350,7 +559,7 @@ function Show-FieldControl {
         'number' {
             $minimum = if ($null -ne $Field.minimum) { [decimal]$Field.minimum } else { 0 }
             $maximum = if ($null -ne $Field.maximum) { [decimal]$Field.maximum } else { 999999 }
-            $control = Add-UiControl -Parent $fieldsPanel -Type NumericUpDown -Bounds @(250, ($Y - 3), 120, 26) -Properties @{
+            $control = Add-UiControl -Parent $fieldsPanel -Type NumericUpDown -Bounds @(210, ($Y - 3), 120, 26) -Properties @{
                 Minimum = $minimum
                 Maximum = $maximum
                 Value = [decimal]$savedValue
@@ -358,14 +567,14 @@ function Show-FieldControl {
         }
 
         'checkbox' {
-            $control = Add-UiControl -Parent $fieldsPanel -Type CheckBox -Bounds @(250, ($Y - 2), 130, 26) -Properties @{
+            $control = Add-UiControl -Parent $fieldsPanel -Type CheckBox -Bounds @(210, ($Y - 2), 130, 26) -Properties @{
                 Text = 'Enabled'
                 Checked = [bool]$savedValue
             }
         }
 
         'choice' {
-            $control = Add-UiControl -Parent $fieldsPanel -Type ComboBox -Bounds @(250, ($Y - 3), 260, 26) -Properties @{
+            $control = Add-UiControl -Parent $fieldsPanel -Type ComboBox -Bounds @(210, ($Y - 3), 260, 26) -Properties @{
                 DropDownStyle = 'DropDownList'
             } -Setup {
                 param($control)
@@ -380,7 +589,7 @@ function Show-FieldControl {
         }
 
         default {
-            $control = Add-UiControl -Parent $fieldsPanel -Type TextBox -Bounds @(250, ($Y - 3), 420, 26) -Properties @{
+            $control = Add-UiControl -Parent $fieldsPanel -Type TextBox -Bounds @(210, ($Y - 3), 298, 26) -Properties @{
                 Text = [string]$savedValue
                 Anchor = 'Top, Left, Right'
                 UseSystemPasswordChar = ($fieldType -eq 'password')
@@ -388,8 +597,14 @@ function Show-FieldControl {
         }
     }
 
+    if ([string]$Field.name -eq 'Protocol' -and $fieldType -eq 'choice') {
+        $control.Add_SelectedIndexChanged({
+            Invoke-ProtocolSelectionChanged
+        })
+    }
+
     if ($Field.help) {
-        $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, ($Y + 24), 650, 18) -Properties @{
+        $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, ($Y + 24), 490, 18) -Properties @{
             Text = [string]$Field.help
             Anchor = 'Top, Left, Right'
             ForeColor = $script:colors.Muted
@@ -412,24 +627,38 @@ function Show-FieldControl {
 function Show-Tool {
     param([Parameter(Mandatory)]$Tool)
 
-    $script:currentTool = $Tool
-    $script:fieldControls = @{}
-    $fieldsPanel.Controls.Clear()
+    $script:suppressFieldEvents = $true
 
-    $toolTitleLabel.Text = [string]$Tool.name
-    $toolDescriptionLabel.Text = [string]$Tool.description
+    try {
+        $script:currentTool = $Tool
+        $script:fieldControls = @{}
+        Initialize-ToolFieldValues -Tool $Tool
+        $fieldsPanel.Controls.Clear()
 
-    $y = 18
-    foreach ($field in @($Tool.fields)) {
-        $y = Show-FieldControl -Tool $Tool -Field $field -Y $y
-    }
+        $toolTitleLabel.Text = [string]$Tool.name
+        $toolDescriptionLabel.Text = [string]$Tool.description
 
-    if (@($Tool.fields).Count -eq 0) {
-        $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, 18, 300, 22) -Properties @{
-            Text = 'No configurable fields.'
-            ForeColor = $script:colors.Muted
-            BackColor = $script:colors.Surface
+        $y = 18
+        $visibleFieldCount = 0
+        foreach ($field in @($Tool.fields)) {
+            if (Test-FieldVisible -Tool $Tool -Field $field) {
+                $visibleFieldCount++
+                $y = Show-FieldControl -Tool $Tool -Field $field -Y $y
+            }
         }
+
+        if ($visibleFieldCount -eq 0) {
+            $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, 18, 300, 22) -Properties @{
+                Text = 'No configurable fields.'
+                ForeColor = $script:colors.Muted
+                BackColor = $script:colors.Surface
+            }
+        }
+
+        Show-PresetButtons -Tool $Tool
+    }
+    finally {
+        $script:suppressFieldEvents = $false
     }
 
     Show-CurrentToolStatus
@@ -459,6 +688,8 @@ function Import-ToolCatalog {
     else {
         $script:currentTool = $null
         $fieldsPanel.Controls.Clear()
+        $presetsPanel.Controls.Clear()
+        $presetsPanel.Visible = $false
         Show-CurrentToolStatus
     }
 }
@@ -597,7 +828,8 @@ $contentPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(292, 108, 794,
 $toolTitleLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 16, 460, 34) -Properties @{ Text = 'Tool'; Anchor = 'Top, Left, Right'; Font = $script:fonts.ToolTitle }
 $runStateLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(580, 21, 190, 24) -Properties @{ Text = 'Idle'; Anchor = 'Top, Right'; Font = $script:fonts.Section; TextAlign = 'MiddleRight'; ForeColor = $script:colors.Muted }
 $toolDescriptionLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(20, 52, 750, 38) -Properties @{ Text = ''; Anchor = 'Top, Left, Right'; ForeColor = $script:colors.Muted }
-$fieldsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(18, 104, 754, 176) -Properties @{ Anchor = 'Top, Left, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; AutoScroll = $true }
+$fieldsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(18, 104, 536, 176) -Properties @{ Anchor = 'Top, Left, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; AutoScroll = $true }
+$presetsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(570, 104, 202, 176) -Properties @{ Anchor = 'Top, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; Visible = $false }
 
 $startButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(18, 296, 96, 34) -Properties @{ Text = 'Run' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedTool }); Use-ButtonTheme -Button $control -Primary }
 $stopButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(126, 296, 96, 34) -Properties @{ Text = 'Stop' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedToolStop }) }

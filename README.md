@@ -15,6 +15,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\ToolLauncher.ps1
 - `ToolLauncher.ps1` opens a dark utility-style GUI with a left-side tool list and a right-side tool workspace.
 - `Tools\tools.json` controls which tools appear, their fields, and which PowerShell script they run.
 - `Scripts\ToolRuntime.ps1` contains catalog loading, process start/stop, console input, and log reads.
-- `Scripts\SpectracomGpsAuth.ps1` handles Spectracom SecureSync serial authentication.
-- `Scripts\RmupConsole.ps1` handles the RMUP telnet console.
+- `Remote Access` is the single launcher tool for remote equipment access.
+- The `Protocol` dropdown switches between Telnet settings and Serial settings.
+- The `RMUP Log` preset fills Telnet settings for `192.168.200.100:23`.
+- The `GPS Auth` preset fills Serial settings and runs the Spectracom SecureSync authentication flow.
 - Each run writes a timestamped log under `Logs`.

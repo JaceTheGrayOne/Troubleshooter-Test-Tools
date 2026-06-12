@@ -1,0 +1,45 @@
+{
+  "presets": [
+    {
+      "id": "rmup-log",
+      "label": "RMUP Log",
+      "description": "RMUP telnet console at 192.168.200.100:23.",
+      "protocol": "Telnet",
+      "action": "",
+      "values": {
+        "PresetId": "rmup-log",
+        "Action": "",
+        "Protocol": "Telnet",
+        "TargetHost": "192.168.200.100",
+        "TcpPort": 23,
+        "ConnectTimeoutMilliseconds": 10000,
+        "PollMilliseconds": 75,
+        "ReceiveBufferBytes": 4096
+      }
+    },
+    {
+      "id": "gps-auth",
+      "label": "GPS Auth",
+      "description": "Authenticate Spectracom SecureSync over serial.",
+      "protocol": "Serial",
+      "action": "SpectracomGpsAuth",
+      "values": {
+        "PresetId": "gps-auth",
+        "Action": "SpectracomGpsAuth",
+        "Protocol": "Serial",
+        "ComPort": "COM1",
+        "BaudRate": 9600,
+        "Parity": "None",
+        "DataBits": 8,
+        "StopBits": "One",
+        "Username": "spadmin",
+        "Password": "admin123",
+        "WakePrompt": true,
+        "OpenDelayMilliseconds": 100,
+        "PromptDelayMilliseconds": 300,
+        "PollMilliseconds": 75,
+        "ReceiveBufferBytes": 4096
+      }
+    }
+  ]
+}
