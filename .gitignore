@@ -1,4 +1,5 @@
 _local/
+archive/
 Logs/*
 !Logs/.gitkeep
 *.log
