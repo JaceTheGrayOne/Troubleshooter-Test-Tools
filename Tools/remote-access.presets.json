@@ -3,7 +3,6 @@
     {
       "id": "rmup-log",
       "label": "RMUP Log",
-      "description": "RMUP telnet console at 192.168.200.100:23.",
       "protocol": "Telnet",
       "action": "",
       "values": {
@@ -20,7 +19,6 @@
     {
       "id": "gps-auth",
       "label": "GPS Auth",
-      "description": "Authenticate Spectracom SecureSync over serial.",
       "protocol": "Serial",
       "action": "SpectracomGpsAuth",
       "values": {

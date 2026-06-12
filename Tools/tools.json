@@ -3,7 +3,6 @@
     {
       "id": "remote-access",
       "name": "Remote Access",
-      "description": "Connects to remote equipment over Telnet or Serial, with presets for RMUP Log and GPS Auth.",
       "script": "Scripts/RemoteAccess.ps1",
       "interactiveInput": true,
       "presetsPath": "Tools/remote-access.presets.json",

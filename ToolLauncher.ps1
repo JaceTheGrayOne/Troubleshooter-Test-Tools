@@ -363,38 +363,17 @@ function Show-ConsoleInputState {
     }
 }
 
-function Get-RunStateText {
-    param($Run)
-
-    if (-not $Run) {
-        return 'Idle'
-    }
-
-    if (Test-ToolRunActive -Run $Run) {
-        return 'Running PID={0}' -f $Run.Process.Id
-    }
-
-    if ($null -ne $Run.ExitCode) {
-        return 'Finished ExitCode={0}' -f $Run.ExitCode
-    }
-
-    return 'Stopped'
-}
-
 function Show-CurrentToolStatus {
     if (-not $script:currentTool) {
         $toolTitleLabel.Text = 'No tool selected'
-        $toolDescriptionLabel.Text = ''
-        $runStateLabel.Text = 'Idle'
         Use-ToolEditorState -Enabled $false
+        Show-ConsoleInputState
         return
     }
 
     $run = Get-CurrentToolRun
     $isRunning = Test-ToolRunActive -Run $run
 
-    $runStateLabel.Text = Get-RunStateText -Run $run
-    $runStateLabel.ForeColor = if ($isRunning) { $script:colors.Teal } else { $script:colors.Muted }
     Use-ToolEditorState -Enabled (-not $isRunning)
     Show-ConsoleInputState
 }
@@ -440,12 +419,10 @@ function Invoke-ProtocolSelectionChanged {
         return
     }
 
-    $protocol = Get-CurrentFieldValueOrDefault -Tool $script:currentTool -FieldName 'Protocol'
     Save-CurrentFieldState
     Set-SavedFieldValue -Tool $script:currentTool -FieldName 'PresetId' -Value ''
     Set-SavedFieldValue -Tool $script:currentTool -FieldName 'Action' -Value ''
 
-    $statusLabel.Text = 'Protocol changed to {0}.' -f $protocol
     Show-Tool -Tool $script:currentTool
 }
 
@@ -474,7 +451,6 @@ function Apply-ToolPreset {
         Set-SavedFieldValue -Tool $script:currentTool -FieldName 'Action' -Value ([string]$Preset.action)
     }
 
-    $statusLabel.Text = 'Applied preset {0}.' -f $Preset.label
     Show-Tool -Tool $script:currentTool
 }
 
@@ -510,7 +486,7 @@ function Show-PresetButtons {
 
     $y = 44
     foreach ($preset in $presets) {
-        $button = Add-UiControl -Parent $presetsPanel -Type Button -Bounds @(12, $y, 166, 32) -Properties @{
+        $null = Add-UiControl -Parent $presetsPanel -Type Button -Bounds @(12, $y, 166, 32) -Properties @{
             Text = [string]$preset.label
             Tag = $preset
             Anchor = 'Top, Left, Right'
@@ -523,19 +499,7 @@ function Show-PresetButtons {
             })
         }
 
-        [void]$button
-
-        if ($preset.description) {
-            $null = Add-UiControl -Parent $presetsPanel -Type Label -Bounds @(12, ($y + 36), 166, 34) -Properties @{
-                Text = [string]$preset.description
-                ForeColor = $script:colors.Muted
-                BackColor = $script:colors.Surface
-            }
-            $y += 82
-        }
-        else {
-            $y += 42
-        }
+        $y += 42
     }
 }
 
@@ -636,7 +600,6 @@ function Show-Tool {
         $fieldsPanel.Controls.Clear()
 
         $toolTitleLabel.Text = [string]$Tool.name
-        $toolDescriptionLabel.Text = [string]$Tool.description
 
         $y = 18
         $visibleFieldCount = 0
@@ -716,12 +679,10 @@ function Invoke-SelectedTool {
         $script:toolRuns[$script:currentTool.id] = $run
         $script:lastRenderedLogPath = $null
         $script:lastRenderedLogText = ''
-        $statusLabel.Text = 'Running {0}. Log: {1}' -f $script:currentTool.name, $run.LogPath
         Show-CurrentToolStatus
         Show-LogView
     }
     catch {
-        $statusLabel.Text = 'Run failed.'
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Run Failed', 'OK', 'Error') | Out-Null
     }
 }
@@ -734,10 +695,8 @@ function Invoke-SelectedToolStop {
 
     try {
         Stop-ToolRun -Run $run
-        $statusLabel.Text = 'Stopped {0}.' -f $script:currentTool.name
     }
     catch {
-        $statusLabel.Text = 'Stop failed.'
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Stop Failed', 'OK', 'Error') | Out-Null
     }
     finally {
@@ -758,7 +717,6 @@ function Send-ConsoleInput {
         $consoleInputBox.Focus()
     }
     catch {
-        $statusLabel.Text = 'Input send failed.'
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Input Send Failed', 'OK', 'Error') | Out-Null
     }
 }
@@ -826,10 +784,8 @@ $toolList.Add_SelectedIndexChanged({
 
 $contentPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(292, 108, 794, 552) -Properties @{ Anchor = 'Top, Bottom, Left, Right'; BorderStyle = 'FixedSingle' }
 $toolTitleLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 16, 460, 34) -Properties @{ Text = 'Tool'; Anchor = 'Top, Left, Right'; Font = $script:fonts.ToolTitle }
-$runStateLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(580, 21, 190, 24) -Properties @{ Text = 'Idle'; Anchor = 'Top, Right'; Font = $script:fonts.Section; TextAlign = 'MiddleRight'; ForeColor = $script:colors.Muted }
-$toolDescriptionLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(20, 52, 750, 38) -Properties @{ Text = ''; Anchor = 'Top, Left, Right'; ForeColor = $script:colors.Muted }
-$fieldsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(18, 104, 536, 176) -Properties @{ Anchor = 'Top, Left, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; AutoScroll = $true }
-$presetsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(570, 104, 202, 176) -Properties @{ Anchor = 'Top, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; Visible = $false }
+$fieldsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(18, 62, 536, 218) -Properties @{ Anchor = 'Top, Left, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; AutoScroll = $true }
+$presetsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(570, 62, 202, 218) -Properties @{ Anchor = 'Top, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; Visible = $false }
 
 $startButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(18, 296, 96, 34) -Properties @{ Text = 'Run' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedTool }); Use-ButtonTheme -Button $control -Primary }
 $stopButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(126, 296, 96, 34) -Properties @{ Text = 'Stop' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedToolStop }) }
@@ -871,7 +827,6 @@ $consoleInputBox = Add-UiControl -Parent $contentPanel -Type TextBox -Bounds @(7
     })
 }
 $sendInputButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(666, 503, 106, 32) -Properties @{ Text = 'Send'; Anchor = 'Bottom, Right'; Enabled = $false; Visible = $false } -Setup { param($control) $control.Add_Click({ Send-ConsoleInput }); Use-ButtonTheme -Button $control -Primary }
-$statusLabel = Add-UiControl -Parent $form -Type Label -Bounds @(18, 674, 1068, 24) -Properties @{ Text = 'Ready.'; Anchor = 'Bottom, Left, Right'; ForeColor = $script:colors.Muted; BackColor = $script:colors.Window }
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 1000
