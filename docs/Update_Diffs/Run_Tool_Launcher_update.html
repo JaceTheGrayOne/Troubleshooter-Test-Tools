@@ -1,0 +1,110 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run_Tool_Launcher_update.html</title>
+<style>
+body {
+    color: #1f2328;
+    font-family: Consolas, "Courier New", monospace;
+    margin: 24px;
+}
+
+h1 {
+    font-family: Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.meta {
+    color: #57606a;
+    font-size: 12px;
+    margin: 0 0 16px;
+}
+
+table.diff {
+    border-collapse: collapse;
+    font-size: 12px;
+    line-height: 1.35;
+    table-layout: fixed;
+    width: 100%;
+}
+
+td {
+    vertical-align: top;
+}
+
+.ln {
+    color: #6e7781;
+    padding: 0 10px 0 0;
+    text-align: right;
+    user-select: none;
+    width: 54px;
+}
+
+.code {
+    overflow-wrap: anywhere;
+    padding: 0 6px;
+    white-space: pre-wrap;
+}
+
+.added .ln,
+.added .code {
+    background: #e6ffed;
+}
+
+.removed .ln,
+.removed .code {
+    background: #ffeef0;
+}
+
+.hunk .ln,
+.hunk .code {
+    background: #ddf4ff;
+    color: #0550ae;
+    font-weight: 700;
+}
+
+.file .ln,
+.file .code {
+    background: #f6f8fa;
+    color: #57606a;
+}
+
+.note .ln,
+.note .code {
+    background: #fff8c5;
+    color: #7d4e00;
+}
+
+@media print {
+    body {
+        margin: 0.35in;
+    }
+
+    table.diff {
+        font-size: 9pt;
+    }
+}
+</style>
+</head>
+<body>
+<h1>Run_Tool_Launcher_update.html</h1>
+<p class="meta">Old: archive/Run_Tool_Launcher.cmd<br>New: Run_Tool_Launcher.cmd</p>
+<table class="diff">
+<tbody>
+<tr class="file"><td class="ln">1</td><td class="code">diff --git a/archive/Run_Tool_Launcher.cmd b/Run_Tool_Launcher.cmd</td></tr>
+<tr class="file"><td class="ln">2</td><td class="code">index 9cc57a3..31d1117 100644</td></tr>
+<tr class="file"><td class="ln">3</td><td class="code">--- a/archive/Run_Tool_Launcher.cmd</td></tr>
+<tr class="file"><td class="ln">4</td><td class="code">+++ b/Run_Tool_Launcher.cmd</td></tr>
+<tr class="hunk"><td class="ln">5</td><td class="code">@@ -1,4 +1,4 @@</td></tr>
+<tr class="context"><td class="ln">6</td><td class="code"> @echo off</td></tr>
+<tr class="context"><td class="ln">7</td><td class="code"> setlocal</td></tr>
+<tr class="context"><td class="ln">8</td><td class="code"> cd /d &quot;%~dp0&quot;</td></tr>
+<tr class="removed"><td class="ln">9</td><td class="code">-powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File &quot;%~dp0ToolLauncher.ps1&quot;</td></tr>
+<tr class="added"><td class="ln">10</td><td class="code">+wscript.exe &quot;%~dp0Run_Tool_Launcher.vbs&quot;</td></tr>
+</tbody>
+</table>
+</body>
+</html>

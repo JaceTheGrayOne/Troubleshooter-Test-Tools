@@ -1,0 +1,10 @@
+diff --git a/archive/Run_Tool_Launcher.cmd b/Run_Tool_Launcher.cmd
+index 9cc57a3..31d1117 100644
+--- a/archive/Run_Tool_Launcher.cmd
++++ b/Run_Tool_Launcher.cmd
+@@ -1,4 +1,4 @@
+ @echo off
+ setlocal
+ cd /d "%~dp0"
+-powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File "%~dp0ToolLauncher.ps1"
++wscript.exe "%~dp0Run_Tool_Launcher.vbs"

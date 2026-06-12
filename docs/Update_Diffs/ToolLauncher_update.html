@@ -1,0 +1,1281 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ToolLauncher_update.html</title>
+<style>
+body {
+    color: #1f2328;
+    font-family: Consolas, "Courier New", monospace;
+    margin: 24px;
+}
+
+h1 {
+    font-family: Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.meta {
+    color: #57606a;
+    font-size: 12px;
+    margin: 0 0 16px;
+}
+
+table.diff {
+    border-collapse: collapse;
+    font-size: 12px;
+    line-height: 1.35;
+    table-layout: fixed;
+    width: 100%;
+}
+
+td {
+    vertical-align: top;
+}
+
+.ln {
+    color: #6e7781;
+    padding: 0 10px 0 0;
+    text-align: right;
+    user-select: none;
+    width: 54px;
+}
+
+.code {
+    overflow-wrap: anywhere;
+    padding: 0 6px;
+    white-space: pre-wrap;
+}
+
+.added .ln,
+.added .code {
+    background: #e6ffed;
+}
+
+.removed .ln,
+.removed .code {
+    background: #ffeef0;
+}
+
+.hunk .ln,
+.hunk .code {
+    background: #ddf4ff;
+    color: #0550ae;
+    font-weight: 700;
+}
+
+.file .ln,
+.file .code {
+    background: #f6f8fa;
+    color: #57606a;
+}
+
+.note .ln,
+.note .code {
+    background: #fff8c5;
+    color: #7d4e00;
+}
+
+@media print {
+    body {
+        margin: 0.35in;
+    }
+
+    table.diff {
+        font-size: 9pt;
+    }
+}
+</style>
+</head>
+<body>
+<h1>ToolLauncher_update.html</h1>
+<p class="meta">Old: archive/ToolLauncher.ps1<br>New: ToolLauncher.ps1</p>
+<table class="diff">
+<tbody>
+<tr class="file"><td class="ln">1</td><td class="code">diff --git a/archive/ToolLauncher.ps1 b/ToolLauncher.ps1</td></tr>
+<tr class="file"><td class="ln">2</td><td class="code">index a7a4200..b10f725 100644</td></tr>
+<tr class="file"><td class="ln">3</td><td class="code">--- a/archive/ToolLauncher.ps1</td></tr>
+<tr class="file"><td class="ln">4</td><td class="code">+++ b/ToolLauncher.ps1</td></tr>
+<tr class="hunk"><td class="ln">5</td><td class="code">@@ -1,39 +1,67 @@</td></tr>
+<tr class="added"><td class="ln">6</td><td class="code">+$script:rootPath = if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {</td></tr>
+<tr class="added"><td class="ln">7</td><td class="code">+    $PSScriptRoot</td></tr>
+<tr class="added"><td class="ln">8</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">9</td><td class="code">+elseif (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {</td></tr>
+<tr class="added"><td class="ln">10</td><td class="code">+    Split-Path -Parent $PSCommandPath</td></tr>
+<tr class="added"><td class="ln">11</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">12</td><td class="code">+else {</td></tr>
+<tr class="added"><td class="ln">13</td><td class="code">+    (Get-Location).Path</td></tr>
+<tr class="added"><td class="ln">14</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">15</td><td class="code">+$script:launcherPath = if (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {</td></tr>
+<tr class="added"><td class="ln">16</td><td class="code">+    $PSCommandPath</td></tr>
+<tr class="added"><td class="ln">17</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">18</td><td class="code">+else {</td></tr>
+<tr class="added"><td class="ln">19</td><td class="code">+    Join-Path $script:rootPath &#39;ToolLauncher.ps1&#39;</td></tr>
+<tr class="added"><td class="ln">20</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">21</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">22</td><td class="code"> if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne &#39;STA&#39;) {</td></tr>
+<tr class="removed"><td class="ln">23</td><td class="code">-    Start-Process -FilePath powershell.exe -WorkingDirectory $PSScriptRoot -ArgumentList @(</td></tr>
+<tr class="added"><td class="ln">24</td><td class="code">+    Start-Process -FilePath powershell.exe -WorkingDirectory $script:rootPath -ArgumentList @(</td></tr>
+<tr class="context"><td class="ln">25</td><td class="code">         &#39;-NoProfile&#39;</td></tr>
+<tr class="context"><td class="ln">26</td><td class="code">         &#39;-ExecutionPolicy&#39;</td></tr>
+<tr class="context"><td class="ln">27</td><td class="code">         &#39;Bypass&#39;</td></tr>
+<tr class="added"><td class="ln">28</td><td class="code">+        &#39;-WindowStyle&#39;</td></tr>
+<tr class="added"><td class="ln">29</td><td class="code">+        &#39;Hidden&#39;</td></tr>
+<tr class="context"><td class="ln">30</td><td class="code">         &#39;-STA&#39;</td></tr>
+<tr class="context"><td class="ln">31</td><td class="code">         &#39;-File&#39;</td></tr>
+<tr class="removed"><td class="ln">32</td><td class="code">-        (&#39;&quot;{0}&quot;&#39; -f $PSCommandPath)</td></tr>
+<tr class="added"><td class="ln">33</td><td class="code">+        (&#39;&quot;{0}&quot;&#39; -f $script:launcherPath)</td></tr>
+<tr class="context"><td class="ln">34</td><td class="code">     )</td></tr>
+<tr class="context"><td class="ln">35</td><td class="code">     exit</td></tr>
+<tr class="context"><td class="ln">36</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">37</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">38</td><td class="code"> Add-Type -AssemblyName System.Windows.Forms</td></tr>
+<tr class="context"><td class="ln">39</td><td class="code"> Add-Type -AssemblyName System.Drawing</td></tr>
+<tr class="added"><td class="ln">40</td><td class="code">+Add-Type @&#39;</td></tr>
+<tr class="added"><td class="ln">41</td><td class="code">+using System;</td></tr>
+<tr class="added"><td class="ln">42</td><td class="code">+using System.Runtime.InteropServices;</td></tr>
+<tr class="context"><td class="ln">43</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">44</td><td class="code">-. (Join-Path $PSScriptRoot &#39;Scripts\ToolRuntime.ps1&#39;)</td></tr>
+<tr class="added"><td class="ln">45</td><td class="code">+public static class LauncherWindow {</td></tr>
+<tr class="added"><td class="ln">46</td><td class="code">+    [DllImport(&quot;user32.dll&quot;)]</td></tr>
+<tr class="added"><td class="ln">47</td><td class="code">+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);</td></tr>
+<tr class="added"><td class="ln">48</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">49</td><td class="code">+    [DllImport(&quot;user32.dll&quot;)]</td></tr>
+<tr class="added"><td class="ln">50</td><td class="code">+    public static extern bool SetForegroundWindow(IntPtr hWnd);</td></tr>
+<tr class="added"><td class="ln">51</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">52</td><td class="code">+&#39;@</td></tr>
+<tr class="added"><td class="ln">53</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">54</td><td class="code">+. (Join-Path $script:rootPath &#39;Scripts\ToolRuntime.ps1&#39;)</td></tr>
+<tr class="context"><td class="ln">55</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">56</td><td class="code"> [System.Windows.Forms.Application]::EnableVisualStyles()</td></tr>
+<tr class="context"><td class="ln">57</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">58</td><td class="code">-$script:rootPath = $PSScriptRoot</td></tr>
+<tr class="context"><td class="ln">59</td><td class="code"> $script:catalogPath = Join-Path $script:rootPath &#39;Tools\tools.json&#39;</td></tr>
+<tr class="context"><td class="ln">60</td><td class="code"> $script:logsPath = Join-Path $script:rootPath &#39;Logs&#39;</td></tr>
+<tr class="context"><td class="ln">61</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">62</td><td class="code">-if (-not (Test-Path -LiteralPath $script:logsPath)) {</td></tr>
+<tr class="removed"><td class="ln">63</td><td class="code">-    $null = New-Item -ItemType Directory -Path $script:logsPath -Force</td></tr>
+<tr class="removed"><td class="ln">64</td><td class="code">-}</td></tr>
+<tr class="added"><td class="ln">65</td><td class="code">+Ensure-Directory -Path $script:logsPath</td></tr>
+<tr class="context"><td class="ln">66</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">67</td><td class="code"> $script:tools = @()</td></tr>
+<tr class="context"><td class="ln">68</td><td class="code"> $script:toolRuns = @{}</td></tr>
+<tr class="context"><td class="ln">69</td><td class="code"> $script:toolValues = @{}</td></tr>
+<tr class="context"><td class="ln">70</td><td class="code"> $script:fieldControls = @{}</td></tr>
+<tr class="added"><td class="ln">71</td><td class="code">+$script:suppressFieldEvents = $false</td></tr>
+<tr class="context"><td class="ln">72</td><td class="code"> $script:currentTool = $null</td></tr>
+<tr class="context"><td class="ln">73</td><td class="code"> $script:lastRenderedLogPath = $null</td></tr>
+<tr class="context"><td class="ln">74</td><td class="code"> $script:lastRenderedLogText = &#39;&#39;</td></tr>
+<tr class="context"><td class="ln">75</td><td class="code"> $script:logClearOffsets = @{}</td></tr>
+<tr class="context"><td class="ln">76</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">77</td><td class="code"> $script:colors = @{</td></tr>
+<tr class="context"><td class="ln">78</td><td class="code">     Window = [System.Drawing.ColorTranslator]::FromHtml(&#39;#101417&#39;)</td></tr>
+<tr class="context"><td class="ln">79</td><td class="code">     Panel = [System.Drawing.ColorTranslator]::FromHtml(&#39;#171c20&#39;)</td></tr>
+<tr class="hunk"><td class="ln">80</td><td class="code">@@ -42,25 +70,27 @@ $script:colors = @{</td></tr>
+<tr class="context"><td class="ln">81</td><td class="code">     Border = [System.Drawing.ColorTranslator]::FromHtml(&#39;#343c44&#39;)</td></tr>
+<tr class="context"><td class="ln">82</td><td class="code">     Text = [System.Drawing.ColorTranslator]::FromHtml(&#39;#f4f7fa&#39;)</td></tr>
+<tr class="context"><td class="ln">83</td><td class="code">     Muted = [System.Drawing.ColorTranslator]::FromHtml(&#39;#aab4bf&#39;)</td></tr>
+<tr class="context"><td class="ln">84</td><td class="code">     Accent = [System.Drawing.ColorTranslator]::FromHtml(&#39;#0078d4&#39;)</td></tr>
+<tr class="context"><td class="ln">85</td><td class="code">     AccentDark = [System.Drawing.ColorTranslator]::FromHtml(&#39;#005a9e&#39;)</td></tr>
+<tr class="context"><td class="ln">86</td><td class="code">     Teal = [System.Drawing.ColorTranslator]::FromHtml(&#39;#37b9ad&#39;)</td></tr>
+<tr class="context"><td class="ln">87</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">88</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">89</td><td class="code">-function Get-Point {</td></tr>
+<tr class="removed"><td class="ln">90</td><td class="code">-    param([int]$X, [int]$Y)</td></tr>
+<tr class="removed"><td class="ln">91</td><td class="code">-    New-Object System.Drawing.Point($X, $Y)</td></tr>
+<tr class="added"><td class="ln">92</td><td class="code">+$script:fonts = @{</td></tr>
+<tr class="added"><td class="ln">93</td><td class="code">+    AppTitle = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 14, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="added"><td class="ln">94</td><td class="code">+    ToolTitle = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 15, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="added"><td class="ln">95</td><td class="code">+    Section = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 10, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="added"><td class="ln">96</td><td class="code">+    Field = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 9, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="added"><td class="ln">97</td><td class="code">+    List = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 10)</td></tr>
+<tr class="added"><td class="ln">98</td><td class="code">+    Log = New-Object System.Drawing.Font(&#39;Consolas&#39;, 9)</td></tr>
+<tr class="context"><td class="ln">99</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">100</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">101</td><td class="code">-function Get-Size {</td></tr>
+<tr class="removed"><td class="ln">102</td><td class="code">-    param([int]$Width, [int]$Height)</td></tr>
+<tr class="removed"><td class="ln">103</td><td class="code">-    New-Object System.Drawing.Size($Width, $Height)</td></tr>
+<tr class="removed"><td class="ln">104</td><td class="code">-}</td></tr>
+<tr class="added"><td class="ln">105</td><td class="code">+function Get-Point { param([int]$X, [int]$Y) New-Object System.Drawing.Point($X, $Y) }</td></tr>
+<tr class="added"><td class="ln">106</td><td class="code">+function Get-Size { param([int]$Width, [int]$Height) New-Object System.Drawing.Size($Width, $Height) }</td></tr>
+<tr class="context"><td class="ln">107</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">108</td><td class="code"> function Use-ControlTheme {</td></tr>
+<tr class="context"><td class="ln">109</td><td class="code">     param([Parameter(Mandatory)][System.Windows.Forms.Control]$Control)</td></tr>
+<tr class="context"><td class="ln">110</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">111</td><td class="code">     $Control.BackColor = $script:colors.Control</td></tr>
+<tr class="context"><td class="ln">112</td><td class="code">     $Control.ForeColor = $script:colors.Text</td></tr>
+<tr class="context"><td class="ln">113</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">114</td><td class="code"> </td></tr>
+<tr class="hunk"><td class="ln">115</td><td class="code">@@ -80,16 +110,63 @@ function Use-ButtonTheme {</td></tr>
+<tr class="context"><td class="ln">116</td><td class="code"> function Use-TextBoxTheme {</td></tr>
+<tr class="context"><td class="ln">117</td><td class="code">     param([Parameter(Mandatory)][System.Windows.Forms.TextBox]$TextBox)</td></tr>
+<tr class="context"><td class="ln">118</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">119</td><td class="code">     $TextBox.BackColor = $script:colors.Control</td></tr>
+<tr class="context"><td class="ln">120</td><td class="code">     $TextBox.ForeColor = $script:colors.Text</td></tr>
+<tr class="context"><td class="ln">121</td><td class="code">     $TextBox.BorderStyle = &#39;FixedSingle&#39;</td></tr>
+<tr class="context"><td class="ln">122</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">123</td><td class="code"> </td></tr>
+<tr class="added"><td class="ln">124</td><td class="code">+function Add-UiControl {</td></tr>
+<tr class="added"><td class="ln">125</td><td class="code">+    param($Parent, [string]$Type, [int[]]$Bounds, [hashtable]$Properties = @{}, [scriptblock]$Setup = $null)</td></tr>
+<tr class="added"><td class="ln">126</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">127</td><td class="code">+    $control = New-Object &quot;System.Windows.Forms.$Type&quot;</td></tr>
+<tr class="added"><td class="ln">128</td><td class="code">+    $control.Location = Get-Point $Bounds[0] $Bounds[1]</td></tr>
+<tr class="added"><td class="ln">129</td><td class="code">+    $control.Size = Get-Size $Bounds[2] $Bounds[3]</td></tr>
+<tr class="added"><td class="ln">130</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">131</td><td class="code">+    switch ($Type) {</td></tr>
+<tr class="added"><td class="ln">132</td><td class="code">+        &#39;Panel&#39; { $control.BackColor = $script:colors.Panel }</td></tr>
+<tr class="added"><td class="ln">133</td><td class="code">+        &#39;Label&#39; {</td></tr>
+<tr class="added"><td class="ln">134</td><td class="code">+            $control.BackColor = $script:colors.Panel</td></tr>
+<tr class="added"><td class="ln">135</td><td class="code">+            $control.ForeColor = $script:colors.Text</td></tr>
+<tr class="added"><td class="ln">136</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">137</td><td class="code">+        &#39;Button&#39; { Use-ButtonTheme -Button $control }</td></tr>
+<tr class="added"><td class="ln">138</td><td class="code">+        &#39;TextBox&#39; { Use-TextBoxTheme -TextBox $control }</td></tr>
+<tr class="added"><td class="ln">139</td><td class="code">+        &#39;ListBox&#39; {</td></tr>
+<tr class="added"><td class="ln">140</td><td class="code">+            Use-ControlTheme -Control $control</td></tr>
+<tr class="added"><td class="ln">141</td><td class="code">+            $control.BorderStyle = &#39;FixedSingle&#39;</td></tr>
+<tr class="added"><td class="ln">142</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">143</td><td class="code">+        { $_ -in &#39;ComboBox&#39;, &#39;NumericUpDown&#39; } { Use-ControlTheme -Control $control }</td></tr>
+<tr class="added"><td class="ln">144</td><td class="code">+        &#39;CheckBox&#39; {</td></tr>
+<tr class="added"><td class="ln">145</td><td class="code">+            $control.BackColor = $script:colors.Surface</td></tr>
+<tr class="added"><td class="ln">146</td><td class="code">+            $control.ForeColor = $script:colors.Text</td></tr>
+<tr class="added"><td class="ln">147</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">148</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">149</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">150</td><td class="code">+    if ($Type -eq &#39;NumericUpDown&#39;) {</td></tr>
+<tr class="added"><td class="ln">151</td><td class="code">+        foreach ($name in &#39;Maximum&#39;, &#39;Minimum&#39;) {</td></tr>
+<tr class="added"><td class="ln">152</td><td class="code">+            if ($Properties.ContainsKey($name)) {</td></tr>
+<tr class="added"><td class="ln">153</td><td class="code">+                $control.$name = $Properties[$name]</td></tr>
+<tr class="added"><td class="ln">154</td><td class="code">+            }</td></tr>
+<tr class="added"><td class="ln">155</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">156</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">157</td><td class="code">+    foreach ($name in @($Properties.Keys | Where-Object { $_ -ne &#39;Value&#39; -and ($Type -ne &#39;NumericUpDown&#39; -or $_ -notin @(&#39;Minimum&#39;, &#39;Maximum&#39;)) })) {</td></tr>
+<tr class="added"><td class="ln">158</td><td class="code">+        $control.$name = $Properties[$name]</td></tr>
+<tr class="added"><td class="ln">159</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">160</td><td class="code">+    if ($Properties.ContainsKey(&#39;Value&#39;)) {</td></tr>
+<tr class="added"><td class="ln">161</td><td class="code">+        $control.Value = $Properties[&#39;Value&#39;]</td></tr>
+<tr class="added"><td class="ln">162</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">163</td><td class="code">+    if ($Setup) {</td></tr>
+<tr class="added"><td class="ln">164</td><td class="code">+        &amp; $Setup $control</td></tr>
+<tr class="added"><td class="ln">165</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">166</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">167</td><td class="code">+    $Parent.Controls.Add($control)</td></tr>
+<tr class="added"><td class="ln">168</td><td class="code">+    return $control</td></tr>
+<tr class="added"><td class="ln">169</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">170</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">171</td><td class="code"> function Get-FieldKey {</td></tr>
+<tr class="context"><td class="ln">172</td><td class="code">     param(</td></tr>
+<tr class="context"><td class="ln">173</td><td class="code">         [Parameter(Mandatory)]$Tool,</td></tr>
+<tr class="context"><td class="ln">174</td><td class="code">         [Parameter(Mandatory)]$Field</td></tr>
+<tr class="context"><td class="ln">175</td><td class="code">     )</td></tr>
+<tr class="context"><td class="ln">176</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">177</td><td class="code">     return &#39;{0}.{1}&#39; -f $Tool.id, $Field.name</td></tr>
+<tr class="context"><td class="ln">178</td><td class="code"> }</td></tr>
+<tr class="hunk"><td class="ln">179</td><td class="code">@@ -113,84 +190,219 @@ function Test-AnyToolRunning {</td></tr>
+<tr class="context"><td class="ln">180</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">181</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">182</td><td class="code"> function Test-ToolInteractiveInput {</td></tr>
+<tr class="context"><td class="ln">183</td><td class="code">     param([AllowNull()]$Tool)</td></tr>
+<tr class="context"><td class="ln">184</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">185</td><td class="code">     return ($Tool -and $Tool.interactiveInput -and [bool]$Tool.interactiveInput)</td></tr>
+<tr class="context"><td class="ln">186</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">187</td><td class="code"> </td></tr>
+<tr class="added"><td class="ln">188</td><td class="code">+function Test-LaunchOnlyTool {</td></tr>
+<tr class="added"><td class="ln">189</td><td class="code">+    param([AllowNull()]$Tool)</td></tr>
+<tr class="added"><td class="ln">190</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">191</td><td class="code">+    return ($Tool -and</td></tr>
+<tr class="added"><td class="ln">192</td><td class="code">+        ($Tool.PSObject.Properties.Name -contains &#39;launchPath&#39;) -and</td></tr>
+<tr class="added"><td class="ln">193</td><td class="code">+        -not [string]::IsNullOrWhiteSpace($Tool.launchPath))</td></tr>
+<tr class="added"><td class="ln">194</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">195</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">196</td><td class="code">+function Get-StartButtonText {</td></tr>
+<tr class="added"><td class="ln">197</td><td class="code">+    param([AllowNull()]$Tool)</td></tr>
+<tr class="added"><td class="ln">198</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">199</td><td class="code">+    if ($Tool -and</td></tr>
+<tr class="added"><td class="ln">200</td><td class="code">+        ($Tool.PSObject.Properties.Name -contains &#39;launchButtonText&#39;) -and</td></tr>
+<tr class="added"><td class="ln">201</td><td class="code">+        -not [string]::IsNullOrWhiteSpace($Tool.launchButtonText)) {</td></tr>
+<tr class="added"><td class="ln">202</td><td class="code">+        return [string]$Tool.launchButtonText</td></tr>
+<tr class="added"><td class="ln">203</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">204</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">205</td><td class="code">+    if (Test-LaunchOnlyTool -Tool $Tool) {</td></tr>
+<tr class="added"><td class="ln">206</td><td class="code">+        return &#39;Launch&#39;</td></tr>
+<tr class="added"><td class="ln">207</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">208</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">209</td><td class="code">+    return &#39;Run&#39;</td></tr>
+<tr class="added"><td class="ln">210</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">211</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">212</td><td class="code">+function Use-ToolLayout {</td></tr>
+<tr class="added"><td class="ln">213</td><td class="code">+    param([AllowNull()]$Tool)</td></tr>
+<tr class="added"><td class="ln">214</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">215</td><td class="code">+    $isLaunchOnly = Test-LaunchOnlyTool -Tool $Tool</td></tr>
+<tr class="added"><td class="ln">216</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">217</td><td class="code">+    $startButton.Text = Get-StartButtonText -Tool $Tool</td></tr>
+<tr class="added"><td class="ln">218</td><td class="code">+    $startButton.Location = if ($isLaunchOnly) { Get-Point 18 62 } else { Get-Point 18 296 }</td></tr>
+<tr class="added"><td class="ln">219</td><td class="code">+    $startButton.Size = if ($isLaunchOnly) { Get-Size 140 34 } else { Get-Size 96 34 }</td></tr>
+<tr class="added"><td class="ln">220</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">221</td><td class="code">+    $fieldsPanel.Visible = -not $isLaunchOnly</td></tr>
+<tr class="added"><td class="ln">222</td><td class="code">+    $presetsPanel.Visible = $false</td></tr>
+<tr class="added"><td class="ln">223</td><td class="code">+    $stopButton.Visible = -not $isLaunchOnly</td></tr>
+<tr class="added"><td class="ln">224</td><td class="code">+    $openLogsButton.Visible = -not $isLaunchOnly</td></tr>
+<tr class="added"><td class="ln">225</td><td class="code">+    $clearViewButton.Visible = -not $isLaunchOnly</td></tr>
+<tr class="added"><td class="ln">226</td><td class="code">+    $consoleOutputLabel.Visible = -not $isLaunchOnly</td></tr>
+<tr class="added"><td class="ln">227</td><td class="code">+    $logBox.Visible = -not $isLaunchOnly</td></tr>
+<tr class="added"><td class="ln">228</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">229</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">230</td><td class="code"> function Get-SavedFieldValue {</td></tr>
+<tr class="context"><td class="ln">231</td><td class="code">     param(</td></tr>
+<tr class="context"><td class="ln">232</td><td class="code">         [Parameter(Mandatory)]$Tool,</td></tr>
+<tr class="context"><td class="ln">233</td><td class="code">         [Parameter(Mandatory)]$Field</td></tr>
+<tr class="context"><td class="ln">234</td><td class="code">     )</td></tr>
+<tr class="context"><td class="ln">235</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">236</td><td class="code">     $key = Get-FieldKey -Tool $Tool -Field $Field</td></tr>
+<tr class="context"><td class="ln">237</td><td class="code">     if ($script:toolValues.ContainsKey($key)) {</td></tr>
+<tr class="context"><td class="ln">238</td><td class="code">         return $script:toolValues[$key]</td></tr>
+<tr class="context"><td class="ln">239</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">240</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">241</td><td class="code">     return $Field.default</td></tr>
+<tr class="context"><td class="ln">242</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">243</td><td class="code"> </td></tr>
+<tr class="added"><td class="ln">244</td><td class="code">+function Get-ToolFieldByName {</td></tr>
+<tr class="added"><td class="ln">245</td><td class="code">+    param(</td></tr>
+<tr class="added"><td class="ln">246</td><td class="code">+        [Parameter(Mandatory)]$Tool,</td></tr>
+<tr class="added"><td class="ln">247</td><td class="code">+        [Parameter(Mandatory)][string]$FieldName</td></tr>
+<tr class="added"><td class="ln">248</td><td class="code">+    )</td></tr>
+<tr class="added"><td class="ln">249</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">250</td><td class="code">+    foreach ($field in @($Tool.fields)) {</td></tr>
+<tr class="added"><td class="ln">251</td><td class="code">+        if ([string]$field.name -eq $FieldName) {</td></tr>
+<tr class="added"><td class="ln">252</td><td class="code">+            return $field</td></tr>
+<tr class="added"><td class="ln">253</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">254</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">255</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">256</td><td class="code">+    return $null</td></tr>
+<tr class="added"><td class="ln">257</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">258</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">259</td><td class="code">+function Set-SavedFieldValue {</td></tr>
+<tr class="added"><td class="ln">260</td><td class="code">+    param(</td></tr>
+<tr class="added"><td class="ln">261</td><td class="code">+        [Parameter(Mandatory)]$Tool,</td></tr>
+<tr class="added"><td class="ln">262</td><td class="code">+        [Parameter(Mandatory)][string]$FieldName,</td></tr>
+<tr class="added"><td class="ln">263</td><td class="code">+        [AllowNull()]$Value</td></tr>
+<tr class="added"><td class="ln">264</td><td class="code">+    )</td></tr>
+<tr class="added"><td class="ln">265</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">266</td><td class="code">+    $field = Get-ToolFieldByName -Tool $Tool -FieldName $FieldName</td></tr>
+<tr class="added"><td class="ln">267</td><td class="code">+    if (-not $field) {</td></tr>
+<tr class="added"><td class="ln">268</td><td class="code">+        return</td></tr>
+<tr class="added"><td class="ln">269</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">270</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">271</td><td class="code">+    $key = Get-FieldKey -Tool $Tool -Field $field</td></tr>
+<tr class="added"><td class="ln">272</td><td class="code">+    $script:toolValues[$key] = $Value</td></tr>
+<tr class="added"><td class="ln">273</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">274</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">275</td><td class="code">+function Initialize-ToolFieldValues {</td></tr>
+<tr class="added"><td class="ln">276</td><td class="code">+    param([Parameter(Mandatory)]$Tool)</td></tr>
+<tr class="added"><td class="ln">277</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">278</td><td class="code">+    foreach ($field in @($Tool.fields)) {</td></tr>
+<tr class="added"><td class="ln">279</td><td class="code">+        $key = Get-FieldKey -Tool $Tool -Field $field</td></tr>
+<tr class="added"><td class="ln">280</td><td class="code">+        if (-not $script:toolValues.ContainsKey($key)) {</td></tr>
+<tr class="added"><td class="ln">281</td><td class="code">+            $script:toolValues[$key] = $field.default</td></tr>
+<tr class="added"><td class="ln">282</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">283</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">284</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">285</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">286</td><td class="code">+function Get-ControlFieldValue {</td></tr>
+<tr class="added"><td class="ln">287</td><td class="code">+    param(</td></tr>
+<tr class="added"><td class="ln">288</td><td class="code">+        [Parameter(Mandatory)]$Field,</td></tr>
+<tr class="added"><td class="ln">289</td><td class="code">+        [Parameter(Mandatory)][System.Windows.Forms.Control]$Control</td></tr>
+<tr class="added"><td class="ln">290</td><td class="code">+    )</td></tr>
+<tr class="added"><td class="ln">291</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">292</td><td class="code">+    switch ([string]$Field.type) {</td></tr>
+<tr class="added"><td class="ln">293</td><td class="code">+        &#39;number&#39; { return [int]$Control.Value }</td></tr>
+<tr class="added"><td class="ln">294</td><td class="code">+        &#39;checkbox&#39; { return [bool]$Control.Checked }</td></tr>
+<tr class="added"><td class="ln">295</td><td class="code">+        &#39;choice&#39; { return [string]$Control.SelectedItem }</td></tr>
+<tr class="added"><td class="ln">296</td><td class="code">+        default { return [string]$Control.Text }</td></tr>
+<tr class="added"><td class="ln">297</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">298</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">299</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">300</td><td class="code">+function Get-CurrentFieldValueOrDefault {</td></tr>
+<tr class="added"><td class="ln">301</td><td class="code">+    param(</td></tr>
+<tr class="added"><td class="ln">302</td><td class="code">+        [Parameter(Mandatory)]$Tool,</td></tr>
+<tr class="added"><td class="ln">303</td><td class="code">+        [Parameter(Mandatory)][string]$FieldName</td></tr>
+<tr class="added"><td class="ln">304</td><td class="code">+    )</td></tr>
+<tr class="added"><td class="ln">305</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">306</td><td class="code">+    if ($script:fieldControls.ContainsKey($FieldName)) {</td></tr>
+<tr class="added"><td class="ln">307</td><td class="code">+        $entry = $script:fieldControls[$FieldName]</td></tr>
+<tr class="added"><td class="ln">308</td><td class="code">+        return Get-ControlFieldValue -Field $entry.Field -Control $entry.Control</td></tr>
+<tr class="added"><td class="ln">309</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">310</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">311</td><td class="code">+    $field = Get-ToolFieldByName -Tool $Tool -FieldName $FieldName</td></tr>
+<tr class="added"><td class="ln">312</td><td class="code">+    if (-not $field) {</td></tr>
+<tr class="added"><td class="ln">313</td><td class="code">+        return $null</td></tr>
+<tr class="added"><td class="ln">314</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">315</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">316</td><td class="code">+    return Get-SavedFieldValue -Tool $Tool -Field $field</td></tr>
+<tr class="added"><td class="ln">317</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">318</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">319</td><td class="code">+function Test-FieldVisible {</td></tr>
+<tr class="added"><td class="ln">320</td><td class="code">+    param(</td></tr>
+<tr class="added"><td class="ln">321</td><td class="code">+        [Parameter(Mandatory)]$Tool,</td></tr>
+<tr class="added"><td class="ln">322</td><td class="code">+        [Parameter(Mandatory)]$Field</td></tr>
+<tr class="added"><td class="ln">323</td><td class="code">+    )</td></tr>
+<tr class="added"><td class="ln">324</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">325</td><td class="code">+    if ([string]$Field.type -eq &#39;hidden&#39;) {</td></tr>
+<tr class="added"><td class="ln">326</td><td class="code">+        return $false</td></tr>
+<tr class="added"><td class="ln">327</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">328</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">329</td><td class="code">+    if (-not $Field.visibleWhen) {</td></tr>
+<tr class="added"><td class="ln">330</td><td class="code">+        return $true</td></tr>
+<tr class="added"><td class="ln">331</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">332</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">333</td><td class="code">+    foreach ($condition in @($Field.visibleWhen.PSObject.Properties)) {</td></tr>
+<tr class="added"><td class="ln">334</td><td class="code">+        $actual = Get-CurrentFieldValueOrDefault -Tool $Tool -FieldName $condition.Name</td></tr>
+<tr class="added"><td class="ln">335</td><td class="code">+        $expected = $condition.Value</td></tr>
+<tr class="added"><td class="ln">336</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">337</td><td class="code">+        if ($expected -is [System.Array]) {</td></tr>
+<tr class="added"><td class="ln">338</td><td class="code">+            if ([string]$actual -notin @($expected | ForEach-Object { [string]$_ })) {</td></tr>
+<tr class="added"><td class="ln">339</td><td class="code">+                return $false</td></tr>
+<tr class="added"><td class="ln">340</td><td class="code">+            }</td></tr>
+<tr class="added"><td class="ln">341</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">342</td><td class="code">+        elseif ([string]$actual -ne [string]$expected) {</td></tr>
+<tr class="added"><td class="ln">343</td><td class="code">+            return $false</td></tr>
+<tr class="added"><td class="ln">344</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">345</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">346</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">347</td><td class="code">+    return $true</td></tr>
+<tr class="added"><td class="ln">348</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">349</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">350</td><td class="code"> function Save-CurrentFieldState {</td></tr>
+<tr class="context"><td class="ln">351</td><td class="code">     if (-not $script:currentTool) {</td></tr>
+<tr class="context"><td class="ln">352</td><td class="code">         return</td></tr>
+<tr class="context"><td class="ln">353</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">354</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">355</td><td class="code">     foreach ($fieldName in $script:fieldControls.Keys) {</td></tr>
+<tr class="context"><td class="ln">356</td><td class="code">         $entry = $script:fieldControls[$fieldName]</td></tr>
+<tr class="context"><td class="ln">357</td><td class="code">         $field = $entry.Field</td></tr>
+<tr class="context"><td class="ln">358</td><td class="code">         $control = $entry.Control</td></tr>
+<tr class="context"><td class="ln">359</td><td class="code">         $key = Get-FieldKey -Tool $script:currentTool -Field $field</td></tr>
+<tr class="context"><td class="ln">360</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">361</td><td class="code">-        switch ([string]$field.type) {</td></tr>
+<tr class="removed"><td class="ln">362</td><td class="code">-            &#39;number&#39; {</td></tr>
+<tr class="removed"><td class="ln">363</td><td class="code">-                $script:toolValues[$key] = [int]$control.Value</td></tr>
+<tr class="removed"><td class="ln">364</td><td class="code">-            }</td></tr>
+<tr class="removed"><td class="ln">365</td><td class="code">-            &#39;checkbox&#39; {</td></tr>
+<tr class="removed"><td class="ln">366</td><td class="code">-                $script:toolValues[$key] = [bool]$control.Checked</td></tr>
+<tr class="removed"><td class="ln">367</td><td class="code">-            }</td></tr>
+<tr class="removed"><td class="ln">368</td><td class="code">-            &#39;choice&#39; {</td></tr>
+<tr class="removed"><td class="ln">369</td><td class="code">-                $script:toolValues[$key] = [string]$control.SelectedItem</td></tr>
+<tr class="removed"><td class="ln">370</td><td class="code">-            }</td></tr>
+<tr class="removed"><td class="ln">371</td><td class="code">-            &#39;password&#39; {</td></tr>
+<tr class="removed"><td class="ln">372</td><td class="code">-                $script:toolValues[$key] = [string]$control.Text</td></tr>
+<tr class="removed"><td class="ln">373</td><td class="code">-            }</td></tr>
+<tr class="removed"><td class="ln">374</td><td class="code">-            default {</td></tr>
+<tr class="removed"><td class="ln">375</td><td class="code">-                $script:toolValues[$key] = [string]$control.Text</td></tr>
+<tr class="removed"><td class="ln">376</td><td class="code">-            }</td></tr>
+<tr class="removed"><td class="ln">377</td><td class="code">-        }</td></tr>
+<tr class="added"><td class="ln">378</td><td class="code">+        $script:toolValues[$key] = Get-ControlFieldValue -Field $field -Control $control</td></tr>
+<tr class="context"><td class="ln">379</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">380</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">381</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">382</td><td class="code"> function Get-CurrentFieldState {</td></tr>
+<tr class="context"><td class="ln">383</td><td class="code">     Save-CurrentFieldState</td></tr>
+<tr class="context"><td class="ln">384</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">385</td><td class="code">     $values = @{}</td></tr>
+<tr class="context"><td class="ln">386</td><td class="code">     if (-not $script:currentTool) {</td></tr>
+<tr class="context"><td class="ln">387</td><td class="code">         return $values</td></tr>
+<tr class="context"><td class="ln">388</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">389</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">390</td><td class="code">     foreach ($field in @($script:currentTool.fields)) {</td></tr>
+<tr class="removed"><td class="ln">391</td><td class="code">-        $key = Get-FieldKey -Tool $script:currentTool -Field $field</td></tr>
+<tr class="removed"><td class="ln">392</td><td class="code">-        $values[$field.name] = $script:toolValues[$key]</td></tr>
+<tr class="added"><td class="ln">393</td><td class="code">+        $values[$field.name] = Get-SavedFieldValue -Tool $script:currentTool -Field $field</td></tr>
+<tr class="context"><td class="ln">394</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">395</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">396</td><td class="code">     return $values</td></tr>
+<tr class="context"><td class="ln">397</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">398</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">399</td><td class="code"> function Use-ToolEditorState {</td></tr>
+<tr class="context"><td class="ln">400</td><td class="code">     param([bool]$Enabled)</td></tr>
+<tr class="context"><td class="ln">401</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">402</td><td class="code">     foreach ($entry in $script:fieldControls.Values) {</td></tr>
+<tr class="context"><td class="ln">403</td><td class="code">         $entry.Control.Enabled = $Enabled</td></tr>
+<tr class="context"><td class="ln">404</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">405</td><td class="code"> </td></tr>
+<tr class="added"><td class="ln">406</td><td class="code">+    if ($presetsPanel) {</td></tr>
+<tr class="added"><td class="ln">407</td><td class="code">+        $presetsPanel.Enabled = $Enabled</td></tr>
+<tr class="added"><td class="ln">408</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">409</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">410</td><td class="code">     $startButton.Enabled = $Enabled -and ($null -ne $script:currentTool)</td></tr>
+<tr class="context"><td class="ln">411</td><td class="code">     $stopButton.Enabled = -not $Enabled</td></tr>
+<tr class="context"><td class="ln">412</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">413</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">414</td><td class="code"> function Show-ConsoleInputState {</td></tr>
+<tr class="context"><td class="ln">415</td><td class="code">     $isInteractive = Test-ToolInteractiveInput -Tool $script:currentTool</td></tr>
+<tr class="context"><td class="ln">416</td><td class="code">     $run = Get-CurrentToolRun</td></tr>
+<tr class="context"><td class="ln">417</td><td class="code">     $isRunning = Test-ToolRunActive -Run $run</td></tr>
+<tr class="hunk"><td class="ln">418</td><td class="code">@@ -202,48 +414,27 @@ function Show-ConsoleInputState {</td></tr>
+<tr class="context"><td class="ln">419</td><td class="code">     $consoleInputBox.Enabled = $canSendInput</td></tr>
+<tr class="context"><td class="ln">420</td><td class="code">     $sendInputButton.Enabled = $canSendInput</td></tr>
+<tr class="context"><td class="ln">421</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">422</td><td class="code">     if (-not $isInteractive) {</td></tr>
+<tr class="context"><td class="ln">423</td><td class="code">         $consoleInputBox.Clear()</td></tr>
+<tr class="context"><td class="ln">424</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">425</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">426</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">427</td><td class="code">-function Get-RunStateText {</td></tr>
+<tr class="removed"><td class="ln">428</td><td class="code">-    param($Run)</td></tr>
+<tr class="removed"><td class="ln">429</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">430</td><td class="code">-    if (-not $Run) {</td></tr>
+<tr class="removed"><td class="ln">431</td><td class="code">-        return &#39;Idle&#39;</td></tr>
+<tr class="removed"><td class="ln">432</td><td class="code">-    }</td></tr>
+<tr class="removed"><td class="ln">433</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">434</td><td class="code">-    if (Test-ToolRunActive -Run $Run) {</td></tr>
+<tr class="removed"><td class="ln">435</td><td class="code">-        return &#39;Running PID={0}&#39; -f $Run.Process.Id</td></tr>
+<tr class="removed"><td class="ln">436</td><td class="code">-    }</td></tr>
+<tr class="removed"><td class="ln">437</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">438</td><td class="code">-    if ($null -ne $Run.ExitCode) {</td></tr>
+<tr class="removed"><td class="ln">439</td><td class="code">-        return &#39;Finished ExitCode={0}&#39; -f $Run.ExitCode</td></tr>
+<tr class="removed"><td class="ln">440</td><td class="code">-    }</td></tr>
+<tr class="removed"><td class="ln">441</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">442</td><td class="code">-    return &#39;Stopped&#39;</td></tr>
+<tr class="removed"><td class="ln">443</td><td class="code">-}</td></tr>
+<tr class="removed"><td class="ln">444</td><td class="code">-</td></tr>
+<tr class="context"><td class="ln">445</td><td class="code"> function Show-CurrentToolStatus {</td></tr>
+<tr class="context"><td class="ln">446</td><td class="code">     if (-not $script:currentTool) {</td></tr>
+<tr class="context"><td class="ln">447</td><td class="code">         $toolTitleLabel.Text = &#39;No tool selected&#39;</td></tr>
+<tr class="removed"><td class="ln">448</td><td class="code">-        $toolDescriptionLabel.Text = &#39;&#39;</td></tr>
+<tr class="removed"><td class="ln">449</td><td class="code">-        $runStateLabel.Text = &#39;Idle&#39;</td></tr>
+<tr class="context"><td class="ln">450</td><td class="code">         Use-ToolEditorState -Enabled $false</td></tr>
+<tr class="added"><td class="ln">451</td><td class="code">+        Show-ConsoleInputState</td></tr>
+<tr class="context"><td class="ln">452</td><td class="code">         return</td></tr>
+<tr class="context"><td class="ln">453</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">454</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">455</td><td class="code">     $run = Get-CurrentToolRun</td></tr>
+<tr class="context"><td class="ln">456</td><td class="code">     $isRunning = Test-ToolRunActive -Run $run</td></tr>
+<tr class="context"><td class="ln">457</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">458</td><td class="code">-    $runStateLabel.Text = Get-RunStateText -Run $run</td></tr>
+<tr class="removed"><td class="ln">459</td><td class="code">-    $runStateLabel.ForeColor = if ($isRunning) { $script:colors.Teal } else { $script:colors.Muted }</td></tr>
+<tr class="context"><td class="ln">460</td><td class="code">     Use-ToolEditorState -Enabled (-not $isRunning)</td></tr>
+<tr class="context"><td class="ln">461</td><td class="code">     Show-ConsoleInputState</td></tr>
+<tr class="context"><td class="ln">462</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">463</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">464</td><td class="code"> function Show-LogView {</td></tr>
+<tr class="context"><td class="ln">465</td><td class="code">     $run = Get-CurrentToolRun</td></tr>
+<tr class="context"><td class="ln">466</td><td class="code">     if (-not $run -or [string]::IsNullOrWhiteSpace($run.LogPath)) {</td></tr>
+<tr class="context"><td class="ln">467</td><td class="code">         if ($script:lastRenderedLogPath) {</td></tr>
+<tr class="hunk"><td class="ln">468</td><td class="code">@@ -255,17 +446,17 @@ function Show-LogView {</td></tr>
+<tr class="context"><td class="ln">469</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">470</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">471</td><td class="code">     if ($script:lastRenderedLogPath -ne $run.LogPath) {</td></tr>
+<tr class="context"><td class="ln">472</td><td class="code">         $script:lastRenderedLogPath = $run.LogPath</td></tr>
+<tr class="context"><td class="ln">473</td><td class="code">         $script:lastRenderedLogText = &#39;&#39;</td></tr>
+<tr class="context"><td class="ln">474</td><td class="code">         $logBox.Clear()</td></tr>
+<tr class="context"><td class="ln">475</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">476</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">477</td><td class="code">-    $text = Read-SharedTextFile -Path $run.LogPath</td></tr>
+<tr class="added"><td class="ln">478</td><td class="code">+    $text = Read-SharedTextFile -Path $run.LogPath -ErrorPrefix &#39;Unable to read log file yet&#39;</td></tr>
+<tr class="context"><td class="ln">479</td><td class="code">     if ($script:logClearOffsets.ContainsKey($run.LogPath)) {</td></tr>
+<tr class="context"><td class="ln">480</td><td class="code">         $clearOffset = [int]$script:logClearOffsets[$run.LogPath]</td></tr>
+<tr class="context"><td class="ln">481</td><td class="code">         if ($clearOffset -le $text.Length) {</td></tr>
+<tr class="context"><td class="ln">482</td><td class="code">             $text = $text.Substring($clearOffset)</td></tr>
+<tr class="context"><td class="ln">483</td><td class="code">         }</td></tr>
+<tr class="context"><td class="ln">484</td><td class="code">         else {</td></tr>
+<tr class="context"><td class="ln">485</td><td class="code">             $script:logClearOffsets.Remove($run.LogPath)</td></tr>
+<tr class="context"><td class="ln">486</td><td class="code">         }</td></tr>
+<tr class="hunk"><td class="ln">487</td><td class="code">@@ -274,139 +465,253 @@ function Show-LogView {</td></tr>
+<tr class="context"><td class="ln">488</td><td class="code">     if ($text -ne $script:lastRenderedLogText) {</td></tr>
+<tr class="context"><td class="ln">489</td><td class="code">         $script:lastRenderedLogText = $text</td></tr>
+<tr class="context"><td class="ln">490</td><td class="code">         $logBox.Text = $text</td></tr>
+<tr class="context"><td class="ln">491</td><td class="code">         $logBox.SelectionStart = $logBox.TextLength</td></tr>
+<tr class="context"><td class="ln">492</td><td class="code">         $logBox.ScrollToCaret()</td></tr>
+<tr class="context"><td class="ln">493</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">494</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">495</td><td class="code"> </td></tr>
+<tr class="added"><td class="ln">496</td><td class="code">+function Invoke-ProtocolSelectionChanged {</td></tr>
+<tr class="added"><td class="ln">497</td><td class="code">+    if ($script:suppressFieldEvents -or -not $script:currentTool) {</td></tr>
+<tr class="added"><td class="ln">498</td><td class="code">+        return</td></tr>
+<tr class="added"><td class="ln">499</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">500</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">501</td><td class="code">+    Save-CurrentFieldState</td></tr>
+<tr class="added"><td class="ln">502</td><td class="code">+    Set-SavedFieldValue -Tool $script:currentTool -FieldName &#39;PresetId&#39; -Value &#39;&#39;</td></tr>
+<tr class="added"><td class="ln">503</td><td class="code">+    Set-SavedFieldValue -Tool $script:currentTool -FieldName &#39;Action&#39; -Value &#39;&#39;</td></tr>
+<tr class="added"><td class="ln">504</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">505</td><td class="code">+    Show-Tool -Tool $script:currentTool</td></tr>
+<tr class="added"><td class="ln">506</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">507</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">508</td><td class="code">+function Invoke-LaunchOnlyTool {</td></tr>
+<tr class="added"><td class="ln">509</td><td class="code">+    param([Parameter(Mandatory)]$Tool)</td></tr>
+<tr class="added"><td class="ln">510</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">511</td><td class="code">+    $launchPath = [string]$Tool.launchPath</td></tr>
+<tr class="added"><td class="ln">512</td><td class="code">+    if ([string]::IsNullOrWhiteSpace($launchPath)) {</td></tr>
+<tr class="added"><td class="ln">513</td><td class="code">+        throw &quot;Tool &#39;$($Tool.name)&#39; has no launch path configured.&quot;</td></tr>
+<tr class="added"><td class="ln">514</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">515</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">516</td><td class="code">+    if ($launchPath -like &#39;ENTER_*_PATH_HERE&#39;) {</td></tr>
+<tr class="added"><td class="ln">517</td><td class="code">+        throw &quot;Tool &#39;$($Tool.name)&#39; still has placeholder launch path &#39;$launchPath&#39;.&quot;</td></tr>
+<tr class="added"><td class="ln">518</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">519</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">520</td><td class="code">+    $resolvedPath = Resolve-ToolPath -RootPath $script:rootPath -Path $launchPath</td></tr>
+<tr class="added"><td class="ln">521</td><td class="code">+    if (-not (Test-Path -LiteralPath $resolvedPath)) {</td></tr>
+<tr class="added"><td class="ln">522</td><td class="code">+        throw &quot;Launch path not found: $resolvedPath&quot;</td></tr>
+<tr class="added"><td class="ln">523</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">524</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">525</td><td class="code">+    $workingDirectory = Split-Path -Parent $resolvedPath</td></tr>
+<tr class="added"><td class="ln">526</td><td class="code">+    if ([string]::IsNullOrWhiteSpace($workingDirectory)) {</td></tr>
+<tr class="added"><td class="ln">527</td><td class="code">+        $workingDirectory = $script:rootPath</td></tr>
+<tr class="added"><td class="ln">528</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">529</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">530</td><td class="code">+    Start-Process -FilePath $resolvedPath -WorkingDirectory $workingDirectory</td></tr>
+<tr class="added"><td class="ln">531</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">532</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">533</td><td class="code">+function Apply-ToolPreset {</td></tr>
+<tr class="added"><td class="ln">534</td><td class="code">+    param([Parameter(Mandatory)]$Preset)</td></tr>
+<tr class="added"><td class="ln">535</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">536</td><td class="code">+    if (-not $script:currentTool) {</td></tr>
+<tr class="added"><td class="ln">537</td><td class="code">+        return</td></tr>
+<tr class="added"><td class="ln">538</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">539</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">540</td><td class="code">+    Save-CurrentFieldState</td></tr>
+<tr class="added"><td class="ln">541</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">542</td><td class="code">+    foreach ($property in @($Preset.values.PSObject.Properties)) {</td></tr>
+<tr class="added"><td class="ln">543</td><td class="code">+        Set-SavedFieldValue -Tool $script:currentTool -FieldName $property.Name -Value $property.Value</td></tr>
+<tr class="added"><td class="ln">544</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">545</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">546</td><td class="code">+    if ($Preset.PSObject.Properties.Name -contains &#39;id&#39;) {</td></tr>
+<tr class="added"><td class="ln">547</td><td class="code">+        Set-SavedFieldValue -Tool $script:currentTool -FieldName &#39;PresetId&#39; -Value ([string]$Preset.id)</td></tr>
+<tr class="added"><td class="ln">548</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">549</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">550</td><td class="code">+    if ($Preset.PSObject.Properties.Name -contains &#39;protocol&#39;) {</td></tr>
+<tr class="added"><td class="ln">551</td><td class="code">+        Set-SavedFieldValue -Tool $script:currentTool -FieldName &#39;Protocol&#39; -Value ([string]$Preset.protocol)</td></tr>
+<tr class="added"><td class="ln">552</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">553</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">554</td><td class="code">+    if ($Preset.PSObject.Properties.Name -contains &#39;action&#39;) {</td></tr>
+<tr class="added"><td class="ln">555</td><td class="code">+        Set-SavedFieldValue -Tool $script:currentTool -FieldName &#39;Action&#39; -Value ([string]$Preset.action)</td></tr>
+<tr class="added"><td class="ln">556</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">557</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">558</td><td class="code">+    Show-Tool -Tool $script:currentTool</td></tr>
+<tr class="added"><td class="ln">559</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">560</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">561</td><td class="code">+function Show-PresetButtons {</td></tr>
+<tr class="added"><td class="ln">562</td><td class="code">+    param([Parameter(Mandatory)]$Tool)</td></tr>
+<tr class="added"><td class="ln">563</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">564</td><td class="code">+    $presetsPanel.Controls.Clear()</td></tr>
+<tr class="added"><td class="ln">565</td><td class="code">+    $presetsPanel.Visible = $false</td></tr>
+<tr class="added"><td class="ln">566</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">567</td><td class="code">+    if (-not ($Tool.PSObject.Properties.Name -contains &#39;presetsPath&#39;) -or [string]::IsNullOrWhiteSpace($Tool.presetsPath)) {</td></tr>
+<tr class="added"><td class="ln">568</td><td class="code">+        return</td></tr>
+<tr class="added"><td class="ln">569</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">570</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">571</td><td class="code">+    $presetsPanel.Visible = $true</td></tr>
+<tr class="added"><td class="ln">572</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">573</td><td class="code">+    $null = Add-UiControl -Parent $presetsPanel -Type Label -Bounds @(12, 12, 170, 22) -Properties @{</td></tr>
+<tr class="added"><td class="ln">574</td><td class="code">+        Text = &#39;Presets&#39;</td></tr>
+<tr class="added"><td class="ln">575</td><td class="code">+        Font = $script:fonts.Section</td></tr>
+<tr class="added"><td class="ln">576</td><td class="code">+        BackColor = $script:colors.Surface</td></tr>
+<tr class="added"><td class="ln">577</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">578</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">579</td><td class="code">+    try {</td></tr>
+<tr class="added"><td class="ln">580</td><td class="code">+        $presets = @(Get-ToolPresets -RootPath $script:rootPath -Tool $Tool)</td></tr>
+<tr class="added"><td class="ln">581</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">582</td><td class="code">+    catch {</td></tr>
+<tr class="added"><td class="ln">583</td><td class="code">+        $null = Add-UiControl -Parent $presetsPanel -Type Label -Bounds @(12, 42, 170, 74) -Properties @{</td></tr>
+<tr class="added"><td class="ln">584</td><td class="code">+            Text = $_.Exception.Message</td></tr>
+<tr class="added"><td class="ln">585</td><td class="code">+            ForeColor = $script:colors.Muted</td></tr>
+<tr class="added"><td class="ln">586</td><td class="code">+            BackColor = $script:colors.Surface</td></tr>
+<tr class="added"><td class="ln">587</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">588</td><td class="code">+        return</td></tr>
+<tr class="added"><td class="ln">589</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">590</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">591</td><td class="code">+    $y = 44</td></tr>
+<tr class="added"><td class="ln">592</td><td class="code">+    foreach ($preset in $presets) {</td></tr>
+<tr class="added"><td class="ln">593</td><td class="code">+        $null = Add-UiControl -Parent $presetsPanel -Type Button -Bounds @(12, $y, 166, 32) -Properties @{</td></tr>
+<tr class="added"><td class="ln">594</td><td class="code">+            Text = [string]$preset.label</td></tr>
+<tr class="added"><td class="ln">595</td><td class="code">+            Tag = $preset</td></tr>
+<tr class="added"><td class="ln">596</td><td class="code">+            Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="added"><td class="ln">597</td><td class="code">+        } -Setup {</td></tr>
+<tr class="added"><td class="ln">598</td><td class="code">+            param($control)</td></tr>
+<tr class="added"><td class="ln">599</td><td class="code">+            $control.Add_Click({</td></tr>
+<tr class="added"><td class="ln">600</td><td class="code">+                param($sender, $eventArgs)</td></tr>
+<tr class="added"><td class="ln">601</td><td class="code">+                [void]$eventArgs</td></tr>
+<tr class="added"><td class="ln">602</td><td class="code">+                Apply-ToolPreset -Preset $sender.Tag</td></tr>
+<tr class="added"><td class="ln">603</td><td class="code">+            })</td></tr>
+<tr class="added"><td class="ln">604</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">605</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">606</td><td class="code">+        $y += 42</td></tr>
+<tr class="added"><td class="ln">607</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">608</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">609</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">610</td><td class="code"> function Show-FieldControl {</td></tr>
+<tr class="context"><td class="ln">611</td><td class="code">     param(</td></tr>
+<tr class="context"><td class="ln">612</td><td class="code">         [Parameter(Mandatory)]$Tool,</td></tr>
+<tr class="context"><td class="ln">613</td><td class="code">         [Parameter(Mandatory)]$Field,</td></tr>
+<tr class="context"><td class="ln">614</td><td class="code">         [Parameter(Mandatory)][int]$Y</td></tr>
+<tr class="context"><td class="ln">615</td><td class="code">     )</td></tr>
+<tr class="context"><td class="ln">616</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">617</td><td class="code">-    $label = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">618</td><td class="code">-    $label.Text = [string]$Field.label</td></tr>
+<tr class="removed"><td class="ln">619</td><td class="code">-    $label.Font = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 9, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="removed"><td class="ln">620</td><td class="code">-    $label.ForeColor = $script:colors.Text</td></tr>
+<tr class="removed"><td class="ln">621</td><td class="code">-    $label.BackColor = $script:colors.Surface</td></tr>
+<tr class="removed"><td class="ln">622</td><td class="code">-    $label.Location = Get-Point 18 $Y</td></tr>
+<tr class="removed"><td class="ln">623</td><td class="code">-    $label.Size = Get-Size 220 22</td></tr>
+<tr class="removed"><td class="ln">624</td><td class="code">-    $fieldsPanel.Controls.Add($label)</td></tr>
+<tr class="added"><td class="ln">625</td><td class="code">+    $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, $Y, 178, 22) -Properties @{</td></tr>
+<tr class="added"><td class="ln">626</td><td class="code">+        Text = [string]$Field.label</td></tr>
+<tr class="added"><td class="ln">627</td><td class="code">+        Font = $script:fonts.Field</td></tr>
+<tr class="added"><td class="ln">628</td><td class="code">+        BackColor = $script:colors.Surface</td></tr>
+<tr class="added"><td class="ln">629</td><td class="code">+    }</td></tr>
+<tr class="context"><td class="ln">630</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">631</td><td class="code">     $fieldType = [string]$Field.type</td></tr>
+<tr class="context"><td class="ln">632</td><td class="code">     $savedValue = Get-SavedFieldValue -Tool $Tool -Field $Field</td></tr>
+<tr class="removed"><td class="ln">633</td><td class="code">-    $control = $null</td></tr>
+<tr class="context"><td class="ln">634</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">635</td><td class="code">     switch ($fieldType) {</td></tr>
+<tr class="context"><td class="ln">636</td><td class="code">         &#39;number&#39; {</td></tr>
+<tr class="removed"><td class="ln">637</td><td class="code">-            $control = New-Object System.Windows.Forms.NumericUpDown</td></tr>
+<tr class="removed"><td class="ln">638</td><td class="code">-            $control.Minimum = if ($null -ne $Field.minimum) { [decimal]$Field.minimum } else { 0 }</td></tr>
+<tr class="removed"><td class="ln">639</td><td class="code">-            $control.Maximum = if ($null -ne $Field.maximum) { [decimal]$Field.maximum } else { 999999 }</td></tr>
+<tr class="removed"><td class="ln">640</td><td class="code">-            $control.Value = [decimal]$savedValue</td></tr>
+<tr class="removed"><td class="ln">641</td><td class="code">-            $control.Location = Get-Point 250 ($Y - 3)</td></tr>
+<tr class="removed"><td class="ln">642</td><td class="code">-            $control.Size = Get-Size 120 26</td></tr>
+<tr class="removed"><td class="ln">643</td><td class="code">-            Use-ControlTheme -Control $control</td></tr>
+<tr class="added"><td class="ln">644</td><td class="code">+            $minimum = if ($null -ne $Field.minimum) { [decimal]$Field.minimum } else { 0 }</td></tr>
+<tr class="added"><td class="ln">645</td><td class="code">+            $maximum = if ($null -ne $Field.maximum) { [decimal]$Field.maximum } else { 999999 }</td></tr>
+<tr class="added"><td class="ln">646</td><td class="code">+            $control = Add-UiControl -Parent $fieldsPanel -Type NumericUpDown -Bounds @(210, ($Y - 3), 120, 26) -Properties @{</td></tr>
+<tr class="added"><td class="ln">647</td><td class="code">+                Minimum = $minimum</td></tr>
+<tr class="added"><td class="ln">648</td><td class="code">+                Maximum = $maximum</td></tr>
+<tr class="added"><td class="ln">649</td><td class="code">+                Value = [decimal]$savedValue</td></tr>
+<tr class="added"><td class="ln">650</td><td class="code">+            }</td></tr>
+<tr class="context"><td class="ln">651</td><td class="code">         }</td></tr>
+<tr class="context"><td class="ln">652</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">653</td><td class="code">         &#39;checkbox&#39; {</td></tr>
+<tr class="removed"><td class="ln">654</td><td class="code">-            $control = New-Object System.Windows.Forms.CheckBox</td></tr>
+<tr class="removed"><td class="ln">655</td><td class="code">-            $control.Checked = [bool]$savedValue</td></tr>
+<tr class="removed"><td class="ln">656</td><td class="code">-            $control.Text = &#39;Enabled&#39;</td></tr>
+<tr class="removed"><td class="ln">657</td><td class="code">-            $control.Location = Get-Point 250 ($Y - 2)</td></tr>
+<tr class="removed"><td class="ln">658</td><td class="code">-            $control.Size = Get-Size 130 26</td></tr>
+<tr class="removed"><td class="ln">659</td><td class="code">-            $control.BackColor = $script:colors.Surface</td></tr>
+<tr class="removed"><td class="ln">660</td><td class="code">-            $control.ForeColor = $script:colors.Text</td></tr>
+<tr class="added"><td class="ln">661</td><td class="code">+            $control = Add-UiControl -Parent $fieldsPanel -Type CheckBox -Bounds @(210, ($Y - 2), 130, 26) -Properties @{</td></tr>
+<tr class="added"><td class="ln">662</td><td class="code">+                Text = &#39;Enabled&#39;</td></tr>
+<tr class="added"><td class="ln">663</td><td class="code">+                Checked = [bool]$savedValue</td></tr>
+<tr class="added"><td class="ln">664</td><td class="code">+            }</td></tr>
+<tr class="context"><td class="ln">665</td><td class="code">         }</td></tr>
+<tr class="context"><td class="ln">666</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">667</td><td class="code">         &#39;choice&#39; {</td></tr>
+<tr class="removed"><td class="ln">668</td><td class="code">-            $control = New-Object System.Windows.Forms.ComboBox</td></tr>
+<tr class="removed"><td class="ln">669</td><td class="code">-            $control.DropDownStyle = &#39;DropDownList&#39;</td></tr>
+<tr class="removed"><td class="ln">670</td><td class="code">-            foreach ($option in @($Field.options)) {</td></tr>
+<tr class="removed"><td class="ln">671</td><td class="code">-                $null = $control.Items.Add([string]$option)</td></tr>
+<tr class="added"><td class="ln">672</td><td class="code">+            $control = Add-UiControl -Parent $fieldsPanel -Type ComboBox -Bounds @(210, ($Y - 3), 260, 26) -Properties @{</td></tr>
+<tr class="added"><td class="ln">673</td><td class="code">+                DropDownStyle = &#39;DropDownList&#39;</td></tr>
+<tr class="added"><td class="ln">674</td><td class="code">+            } -Setup {</td></tr>
+<tr class="added"><td class="ln">675</td><td class="code">+                param($control)</td></tr>
+<tr class="added"><td class="ln">676</td><td class="code">+                foreach ($option in @($Field.options)) {</td></tr>
+<tr class="added"><td class="ln">677</td><td class="code">+                    $null = $control.Items.Add([string]$option)</td></tr>
+<tr class="added"><td class="ln">678</td><td class="code">+                }</td></tr>
+<tr class="added"><td class="ln">679</td><td class="code">+                if ($control.Items.Count -gt 0) {</td></tr>
+<tr class="added"><td class="ln">680</td><td class="code">+                    $selectedIndex = $control.Items.IndexOf([string]$savedValue)</td></tr>
+<tr class="added"><td class="ln">681</td><td class="code">+                    $control.SelectedIndex = if ($selectedIndex -ge 0) { $selectedIndex } else { 0 }</td></tr>
+<tr class="added"><td class="ln">682</td><td class="code">+                }</td></tr>
+<tr class="context"><td class="ln">683</td><td class="code">             }</td></tr>
+<tr class="removed"><td class="ln">684</td><td class="code">-            if ($control.Items.Count -gt 0) {</td></tr>
+<tr class="removed"><td class="ln">685</td><td class="code">-                $selectedIndex = $control.Items.IndexOf([string]$savedValue)</td></tr>
+<tr class="removed"><td class="ln">686</td><td class="code">-                $control.SelectedIndex = if ($selectedIndex -ge 0) { $selectedIndex } else { 0 }</td></tr>
+<tr class="removed"><td class="ln">687</td><td class="code">-            }</td></tr>
+<tr class="removed"><td class="ln">688</td><td class="code">-            $control.Location = Get-Point 250 ($Y - 3)</td></tr>
+<tr class="removed"><td class="ln">689</td><td class="code">-            $control.Size = Get-Size 260 26</td></tr>
+<tr class="removed"><td class="ln">690</td><td class="code">-            Use-ControlTheme -Control $control</td></tr>
+<tr class="removed"><td class="ln">691</td><td class="code">-        }</td></tr>
+<tr class="removed"><td class="ln">692</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">693</td><td class="code">-        &#39;password&#39; {</td></tr>
+<tr class="removed"><td class="ln">694</td><td class="code">-            $control = New-Object System.Windows.Forms.TextBox</td></tr>
+<tr class="removed"><td class="ln">695</td><td class="code">-            $control.Text = [string]$savedValue</td></tr>
+<tr class="removed"><td class="ln">696</td><td class="code">-            $control.UseSystemPasswordChar = $true</td></tr>
+<tr class="removed"><td class="ln">697</td><td class="code">-            $control.Location = Get-Point 250 ($Y - 3)</td></tr>
+<tr class="removed"><td class="ln">698</td><td class="code">-            $control.Size = Get-Size 420 26</td></tr>
+<tr class="removed"><td class="ln">699</td><td class="code">-            $control.Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">700</td><td class="code">-            Use-TextBoxTheme -TextBox $control</td></tr>
+<tr class="context"><td class="ln">701</td><td class="code">         }</td></tr>
+<tr class="context"><td class="ln">702</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">703</td><td class="code">         default {</td></tr>
+<tr class="removed"><td class="ln">704</td><td class="code">-            $control = New-Object System.Windows.Forms.TextBox</td></tr>
+<tr class="removed"><td class="ln">705</td><td class="code">-            $control.Text = [string]$savedValue</td></tr>
+<tr class="removed"><td class="ln">706</td><td class="code">-            $control.Location = Get-Point 250 ($Y - 3)</td></tr>
+<tr class="removed"><td class="ln">707</td><td class="code">-            $control.Size = Get-Size 420 26</td></tr>
+<tr class="removed"><td class="ln">708</td><td class="code">-            $control.Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">709</td><td class="code">-            Use-TextBoxTheme -TextBox $control</td></tr>
+<tr class="added"><td class="ln">710</td><td class="code">+            $control = Add-UiControl -Parent $fieldsPanel -Type TextBox -Bounds @(210, ($Y - 3), 298, 26) -Properties @{</td></tr>
+<tr class="added"><td class="ln">711</td><td class="code">+                Text = [string]$savedValue</td></tr>
+<tr class="added"><td class="ln">712</td><td class="code">+                Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="added"><td class="ln">713</td><td class="code">+                UseSystemPasswordChar = ($fieldType -eq &#39;password&#39;)</td></tr>
+<tr class="added"><td class="ln">714</td><td class="code">+            }</td></tr>
+<tr class="context"><td class="ln">715</td><td class="code">         }</td></tr>
+<tr class="context"><td class="ln">716</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">717</td><td class="code"> </td></tr>
+<tr class="added"><td class="ln">718</td><td class="code">+    if ([string]$Field.name -eq &#39;Protocol&#39; -and $fieldType -eq &#39;choice&#39;) {</td></tr>
+<tr class="added"><td class="ln">719</td><td class="code">+        $control.Add_SelectedIndexChanged({</td></tr>
+<tr class="added"><td class="ln">720</td><td class="code">+            Invoke-ProtocolSelectionChanged</td></tr>
+<tr class="added"><td class="ln">721</td><td class="code">+        })</td></tr>
+<tr class="added"><td class="ln">722</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">723</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">724</td><td class="code">     if ($Field.help) {</td></tr>
+<tr class="removed"><td class="ln">725</td><td class="code">-        $helpLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">726</td><td class="code">-        $helpLabel.Text = [string]$Field.help</td></tr>
+<tr class="removed"><td class="ln">727</td><td class="code">-        $helpLabel.ForeColor = $script:colors.Muted</td></tr>
+<tr class="removed"><td class="ln">728</td><td class="code">-        $helpLabel.BackColor = $script:colors.Surface</td></tr>
+<tr class="removed"><td class="ln">729</td><td class="code">-        $helpLabel.Location = Get-Point 18 ($Y + 24)</td></tr>
+<tr class="removed"><td class="ln">730</td><td class="code">-        $helpLabel.Size = Get-Size 650 18</td></tr>
+<tr class="removed"><td class="ln">731</td><td class="code">-        $helpLabel.Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">732</td><td class="code">-        $fieldsPanel.Controls.Add($helpLabel)</td></tr>
+<tr class="added"><td class="ln">733</td><td class="code">+        $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, ($Y + 24), 490, 18) -Properties @{</td></tr>
+<tr class="added"><td class="ln">734</td><td class="code">+            Text = [string]$Field.help</td></tr>
+<tr class="added"><td class="ln">735</td><td class="code">+            Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="added"><td class="ln">736</td><td class="code">+            ForeColor = $script:colors.Muted</td></tr>
+<tr class="added"><td class="ln">737</td><td class="code">+            BackColor = $script:colors.Surface</td></tr>
+<tr class="added"><td class="ln">738</td><td class="code">+        }</td></tr>
+<tr class="context"><td class="ln">739</td><td class="code">         $rowHeight = 58</td></tr>
+<tr class="context"><td class="ln">740</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">741</td><td class="code">     else {</td></tr>
+<tr class="context"><td class="ln">742</td><td class="code">         $rowHeight = 42</td></tr>
+<tr class="context"><td class="ln">743</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">744</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">745</td><td class="code">-    $fieldsPanel.Controls.Add($control)</td></tr>
+<tr class="context"><td class="ln">746</td><td class="code">     $script:fieldControls[$Field.name] = @{</td></tr>
+<tr class="context"><td class="ln">747</td><td class="code">         Field = $Field</td></tr>
+<tr class="context"><td class="ln">748</td><td class="code">         Control = $control</td></tr>
+<tr class="context"><td class="ln">749</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">750</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">751</td><td class="code">     return $Y + $rowHeight</td></tr>
+<tr class="context"><td class="ln">752</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">753</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">754</td><td class="code"> function Show-Tool {</td></tr>
+<tr class="context"><td class="ln">755</td><td class="code">     param([Parameter(Mandatory)]$Tool)</td></tr>
+<tr class="context"><td class="ln">756</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">757</td><td class="code">-    $script:currentTool = $Tool</td></tr>
+<tr class="removed"><td class="ln">758</td><td class="code">-    $script:fieldControls = @{}</td></tr>
+<tr class="removed"><td class="ln">759</td><td class="code">-    $fieldsPanel.Controls.Clear()</td></tr>
+<tr class="added"><td class="ln">760</td><td class="code">+    $script:suppressFieldEvents = $true</td></tr>
+<tr class="context"><td class="ln">761</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">762</td><td class="code">-    $toolTitleLabel.Text = [string]$Tool.name</td></tr>
+<tr class="removed"><td class="ln">763</td><td class="code">-    $toolDescriptionLabel.Text = [string]$Tool.description</td></tr>
+<tr class="added"><td class="ln">764</td><td class="code">+    try {</td></tr>
+<tr class="added"><td class="ln">765</td><td class="code">+        $script:currentTool = $Tool</td></tr>
+<tr class="added"><td class="ln">766</td><td class="code">+        $script:fieldControls = @{}</td></tr>
+<tr class="added"><td class="ln">767</td><td class="code">+        Initialize-ToolFieldValues -Tool $Tool</td></tr>
+<tr class="added"><td class="ln">768</td><td class="code">+        $fieldsPanel.Controls.Clear()</td></tr>
+<tr class="added"><td class="ln">769</td><td class="code">+        $presetsPanel.Controls.Clear()</td></tr>
+<tr class="added"><td class="ln">770</td><td class="code">+        Use-ToolLayout -Tool $Tool</td></tr>
+<tr class="context"><td class="ln">771</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">772</td><td class="code">-    $y = 18</td></tr>
+<tr class="removed"><td class="ln">773</td><td class="code">-    foreach ($field in @($Tool.fields)) {</td></tr>
+<tr class="removed"><td class="ln">774</td><td class="code">-        $y = Show-FieldControl -Tool $Tool -Field $field -Y $y</td></tr>
+<tr class="added"><td class="ln">775</td><td class="code">+        $toolTitleLabel.Text = [string]$Tool.name</td></tr>
+<tr class="added"><td class="ln">776</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">777</td><td class="code">+        if (-not (Test-LaunchOnlyTool -Tool $Tool)) {</td></tr>
+<tr class="added"><td class="ln">778</td><td class="code">+            $y = 18</td></tr>
+<tr class="added"><td class="ln">779</td><td class="code">+            $visibleFieldCount = 0</td></tr>
+<tr class="added"><td class="ln">780</td><td class="code">+            foreach ($field in @($Tool.fields)) {</td></tr>
+<tr class="added"><td class="ln">781</td><td class="code">+                if (Test-FieldVisible -Tool $Tool -Field $field) {</td></tr>
+<tr class="added"><td class="ln">782</td><td class="code">+                    $visibleFieldCount++</td></tr>
+<tr class="added"><td class="ln">783</td><td class="code">+                    $y = Show-FieldControl -Tool $Tool -Field $field -Y $y</td></tr>
+<tr class="added"><td class="ln">784</td><td class="code">+                }</td></tr>
+<tr class="added"><td class="ln">785</td><td class="code">+            }</td></tr>
+<tr class="added"><td class="ln">786</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">787</td><td class="code">+            if ($visibleFieldCount -eq 0) {</td></tr>
+<tr class="added"><td class="ln">788</td><td class="code">+                $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, 18, 300, 22) -Properties @{</td></tr>
+<tr class="added"><td class="ln">789</td><td class="code">+                    Text = &#39;No configurable fields.&#39;</td></tr>
+<tr class="added"><td class="ln">790</td><td class="code">+                    ForeColor = $script:colors.Muted</td></tr>
+<tr class="added"><td class="ln">791</td><td class="code">+                    BackColor = $script:colors.Surface</td></tr>
+<tr class="added"><td class="ln">792</td><td class="code">+                }</td></tr>
+<tr class="added"><td class="ln">793</td><td class="code">+            }</td></tr>
+<tr class="added"><td class="ln">794</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">795</td><td class="code">+            Show-PresetButtons -Tool $Tool</td></tr>
+<tr class="added"><td class="ln">796</td><td class="code">+        }</td></tr>
+<tr class="context"><td class="ln">797</td><td class="code">     }</td></tr>
+<tr class="removed"><td class="ln">798</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">799</td><td class="code">-    if (@($Tool.fields).Count -eq 0) {</td></tr>
+<tr class="removed"><td class="ln">800</td><td class="code">-        $emptyLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">801</td><td class="code">-        $emptyLabel.Text = &#39;No configurable fields.&#39;</td></tr>
+<tr class="removed"><td class="ln">802</td><td class="code">-        $emptyLabel.Location = Get-Point 18 18</td></tr>
+<tr class="removed"><td class="ln">803</td><td class="code">-        $emptyLabel.Size = Get-Size 300 22</td></tr>
+<tr class="removed"><td class="ln">804</td><td class="code">-        $emptyLabel.ForeColor = $script:colors.Muted</td></tr>
+<tr class="removed"><td class="ln">805</td><td class="code">-        $emptyLabel.BackColor = $script:colors.Surface</td></tr>
+<tr class="removed"><td class="ln">806</td><td class="code">-        $fieldsPanel.Controls.Add($emptyLabel)</td></tr>
+<tr class="added"><td class="ln">807</td><td class="code">+    finally {</td></tr>
+<tr class="added"><td class="ln">808</td><td class="code">+        $script:suppressFieldEvents = $false</td></tr>
+<tr class="context"><td class="ln">809</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">810</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">811</td><td class="code">     Show-CurrentToolStatus</td></tr>
+<tr class="context"><td class="ln">812</td><td class="code">     Show-LogView</td></tr>
+<tr class="context"><td class="ln">813</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">814</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">815</td><td class="code"> function Import-ToolCatalog {</td></tr>
+<tr class="context"><td class="ln">816</td><td class="code">     try {</td></tr>
+<tr class="hunk"><td class="ln">817</td><td class="code">@@ -426,25 +731,38 @@ function Import-ToolCatalog {</td></tr>
+<tr class="context"><td class="ln">818</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">819</td><td class="code">     if ($script:tools.Count -gt 0) {</td></tr>
+<tr class="context"><td class="ln">820</td><td class="code">         $toolList.SelectedIndex = 0</td></tr>
+<tr class="context"><td class="ln">821</td><td class="code">         Show-Tool -Tool $script:tools[0]</td></tr>
+<tr class="context"><td class="ln">822</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">823</td><td class="code">     else {</td></tr>
+<tr class="context"><td class="ln">824</td><td class="code">         $script:currentTool = $null</td></tr>
+<tr class="context"><td class="ln">825</td><td class="code">         $fieldsPanel.Controls.Clear()</td></tr>
+<tr class="added"><td class="ln">826</td><td class="code">+        $presetsPanel.Controls.Clear()</td></tr>
+<tr class="added"><td class="ln">827</td><td class="code">+        $presetsPanel.Visible = $false</td></tr>
+<tr class="context"><td class="ln">828</td><td class="code">         Show-CurrentToolStatus</td></tr>
+<tr class="context"><td class="ln">829</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">830</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">831</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">832</td><td class="code"> function Invoke-SelectedTool {</td></tr>
+<tr class="context"><td class="ln">833</td><td class="code">     if (-not $script:currentTool) {</td></tr>
+<tr class="context"><td class="ln">834</td><td class="code">         return</td></tr>
+<tr class="context"><td class="ln">835</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">836</td><td class="code"> </td></tr>
+<tr class="added"><td class="ln">837</td><td class="code">+    if (Test-LaunchOnlyTool -Tool $script:currentTool) {</td></tr>
+<tr class="added"><td class="ln">838</td><td class="code">+        try {</td></tr>
+<tr class="added"><td class="ln">839</td><td class="code">+            Invoke-LaunchOnlyTool -Tool $script:currentTool</td></tr>
+<tr class="added"><td class="ln">840</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">841</td><td class="code">+        catch {</td></tr>
+<tr class="added"><td class="ln">842</td><td class="code">+            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, &#39;Launch Failed&#39;, &#39;OK&#39;, &#39;Error&#39;) | Out-Null</td></tr>
+<tr class="added"><td class="ln">843</td><td class="code">+        }</td></tr>
+<tr class="added"><td class="ln">844</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">845</td><td class="code">+        return</td></tr>
+<tr class="added"><td class="ln">846</td><td class="code">+    }</td></tr>
+<tr class="added"><td class="ln">847</td><td class="code">+</td></tr>
+<tr class="context"><td class="ln">848</td><td class="code">     $run = Get-CurrentToolRun</td></tr>
+<tr class="context"><td class="ln">849</td><td class="code">     if (Test-ToolRunActive -Run $run) {</td></tr>
+<tr class="context"><td class="ln">850</td><td class="code">         return</td></tr>
+<tr class="context"><td class="ln">851</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">852</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">853</td><td class="code">     $values = Get-CurrentFieldState</td></tr>
+<tr class="context"><td class="ln">854</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">855</td><td class="code">     try {</td></tr>
+<tr class="hunk"><td class="ln">856</td><td class="code">@@ -452,38 +770,34 @@ function Invoke-SelectedTool {</td></tr>
+<tr class="context"><td class="ln">857</td><td class="code">             -RootPath $script:rootPath `</td></tr>
+<tr class="context"><td class="ln">858</td><td class="code">             -LogsPath $script:logsPath `</td></tr>
+<tr class="context"><td class="ln">859</td><td class="code">             -Tool $script:currentTool `</td></tr>
+<tr class="context"><td class="ln">860</td><td class="code">             -FieldValues $values</td></tr>
+<tr class="context"><td class="ln">861</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">862</td><td class="code">         $script:toolRuns[$script:currentTool.id] = $run</td></tr>
+<tr class="context"><td class="ln">863</td><td class="code">         $script:lastRenderedLogPath = $null</td></tr>
+<tr class="context"><td class="ln">864</td><td class="code">         $script:lastRenderedLogText = &#39;&#39;</td></tr>
+<tr class="removed"><td class="ln">865</td><td class="code">-        $statusLabel.Text = &#39;Running {0}. Log: {1}&#39; -f $script:currentTool.name, $run.LogPath</td></tr>
+<tr class="context"><td class="ln">866</td><td class="code">         Show-CurrentToolStatus</td></tr>
+<tr class="context"><td class="ln">867</td><td class="code">         Show-LogView</td></tr>
+<tr class="context"><td class="ln">868</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">869</td><td class="code">     catch {</td></tr>
+<tr class="removed"><td class="ln">870</td><td class="code">-        $statusLabel.Text = &#39;Run failed.&#39;</td></tr>
+<tr class="context"><td class="ln">871</td><td class="code">         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, &#39;Run Failed&#39;, &#39;OK&#39;, &#39;Error&#39;) | Out-Null</td></tr>
+<tr class="context"><td class="ln">872</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">873</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">874</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">875</td><td class="code"> function Invoke-SelectedToolStop {</td></tr>
+<tr class="context"><td class="ln">876</td><td class="code">     $run = Get-CurrentToolRun</td></tr>
+<tr class="context"><td class="ln">877</td><td class="code">     if (-not $run) {</td></tr>
+<tr class="context"><td class="ln">878</td><td class="code">         return</td></tr>
+<tr class="context"><td class="ln">879</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">880</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">881</td><td class="code">     try {</td></tr>
+<tr class="context"><td class="ln">882</td><td class="code">         Stop-ToolRun -Run $run</td></tr>
+<tr class="removed"><td class="ln">883</td><td class="code">-        $statusLabel.Text = &#39;Stopped {0}.&#39; -f $script:currentTool.name</td></tr>
+<tr class="context"><td class="ln">884</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">885</td><td class="code">     catch {</td></tr>
+<tr class="removed"><td class="ln">886</td><td class="code">-        $statusLabel.Text = &#39;Stop failed.&#39;</td></tr>
+<tr class="context"><td class="ln">887</td><td class="code">         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, &#39;Stop Failed&#39;, &#39;OK&#39;, &#39;Error&#39;) | Out-Null</td></tr>
+<tr class="context"><td class="ln">888</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">889</td><td class="code">     finally {</td></tr>
+<tr class="context"><td class="ln">890</td><td class="code">         Show-CurrentToolStatus</td></tr>
+<tr class="context"><td class="ln">891</td><td class="code">         Show-LogView</td></tr>
+<tr class="context"><td class="ln">892</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">893</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">894</td><td class="code"> </td></tr>
+<tr class="hunk"><td class="ln">895</td><td class="code">@@ -494,17 +808,16 @@ function Send-ConsoleInput {</td></tr>
+<tr class="context"><td class="ln">896</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">897</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">898</td><td class="code">     try {</td></tr>
+<tr class="context"><td class="ln">899</td><td class="code">         Send-ToolRunInput -Run $run -Text ([string]$consoleInputBox.Text)</td></tr>
+<tr class="context"><td class="ln">900</td><td class="code">         $consoleInputBox.Clear()</td></tr>
+<tr class="context"><td class="ln">901</td><td class="code">         $consoleInputBox.Focus()</td></tr>
+<tr class="context"><td class="ln">902</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">903</td><td class="code">     catch {</td></tr>
+<tr class="removed"><td class="ln">904</td><td class="code">-        $statusLabel.Text = &#39;Input send failed.&#39;</td></tr>
+<tr class="context"><td class="ln">905</td><td class="code">         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, &#39;Input Send Failed&#39;, &#39;OK&#39;, &#39;Error&#39;) | Out-Null</td></tr>
+<tr class="context"><td class="ln">906</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">907</td><td class="code"> }</td></tr>
+<tr class="context"><td class="ln">908</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">909</td><td class="code"> function Sync-RunningTool {</td></tr>
+<tr class="context"><td class="ln">910</td><td class="code">     foreach ($toolId in @($script:toolRuns.Keys)) {</td></tr>
+<tr class="context"><td class="ln">911</td><td class="code">         $run = $script:toolRuns[$toolId]</td></tr>
+<tr class="context"><td class="ln">912</td><td class="code">         if ($run.Process -and $null -eq $run.ExitCode -and $run.Process.HasExited) {</td></tr>
+<tr class="hunk"><td class="ln">913</td><td class="code">@@ -544,231 +857,81 @@ function Confirm-RunningToolClose {</td></tr>
+<tr class="context"><td class="ln">914</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">915</td><td class="code"> $form = New-Object System.Windows.Forms.Form</td></tr>
+<tr class="context"><td class="ln">916</td><td class="code"> $form.Text = &#39;Troubleshooter Test Tools&#39;</td></tr>
+<tr class="context"><td class="ln">917</td><td class="code"> $form.StartPosition = &#39;CenterScreen&#39;</td></tr>
+<tr class="context"><td class="ln">918</td><td class="code"> $form.MinimumSize = Get-Size 980 640</td></tr>
+<tr class="context"><td class="ln">919</td><td class="code"> $form.Size = Get-Size 1120 740</td></tr>
+<tr class="context"><td class="ln">920</td><td class="code"> $form.BackColor = $script:colors.Window</td></tr>
+<tr class="context"><td class="ln">921</td><td class="code"> $form.ForeColor = $script:colors.Text</td></tr>
+<tr class="added"><td class="ln">922</td><td class="code">+$form.Add_Shown({</td></tr>
+<tr class="added"><td class="ln">923</td><td class="code">+    [LauncherWindow]::ShowWindow($form.Handle, 5) | Out-Null</td></tr>
+<tr class="added"><td class="ln">924</td><td class="code">+    [LauncherWindow]::SetForegroundWindow($form.Handle) | Out-Null</td></tr>
+<tr class="added"><td class="ln">925</td><td class="code">+})</td></tr>
+<tr class="context"><td class="ln">926</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">927</td><td class="code">-$topPanel = New-Object System.Windows.Forms.Panel</td></tr>
+<tr class="removed"><td class="ln">928</td><td class="code">-$topPanel.Location = Get-Point 16 14</td></tr>
+<tr class="removed"><td class="ln">929</td><td class="code">-$topPanel.Size = Get-Size 1070 80</td></tr>
+<tr class="removed"><td class="ln">930</td><td class="code">-$topPanel.Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">931</td><td class="code">-$topPanel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">932</td><td class="code">-$topPanel.BorderStyle = &#39;FixedSingle&#39;</td></tr>
+<tr class="removed"><td class="ln">933</td><td class="code">-$form.Controls.Add($topPanel)</td></tr>
+<tr class="added"><td class="ln">934</td><td class="code">+$topPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(16, 14, 1070, 80) -Properties @{ Anchor = &#39;Top, Left, Right&#39;; BorderStyle = &#39;FixedSingle&#39; }</td></tr>
+<tr class="added"><td class="ln">935</td><td class="code">+$null = Add-UiControl -Parent $topPanel -Type Label -Bounds @(16, 13, 360, 30) -Properties @{ Text = &#39;Troubleshooter Test Tools&#39;; Font = $script:fonts.AppTitle }</td></tr>
+<tr class="context"><td class="ln">936</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">937</td><td class="code">-$appTitleLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">938</td><td class="code">-$appTitleLabel.Text = &#39;Troubleshooter Test Tools&#39;</td></tr>
+<tr class="removed"><td class="ln">939</td><td class="code">-$appTitleLabel.Font = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 14, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="removed"><td class="ln">940</td><td class="code">-$appTitleLabel.Location = Get-Point 16 13</td></tr>
+<tr class="removed"><td class="ln">941</td><td class="code">-$appTitleLabel.Size = Get-Size 360 30</td></tr>
+<tr class="removed"><td class="ln">942</td><td class="code">-$appTitleLabel.ForeColor = $script:colors.Text</td></tr>
+<tr class="removed"><td class="ln">943</td><td class="code">-$appTitleLabel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">944</td><td class="code">-$topPanel.Controls.Add($appTitleLabel)</td></tr>
+<tr class="removed"><td class="ln">945</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">946</td><td class="code">-$navPanel = New-Object System.Windows.Forms.Panel</td></tr>
+<tr class="removed"><td class="ln">947</td><td class="code">-$navPanel.Location = Get-Point 16 108</td></tr>
+<tr class="removed"><td class="ln">948</td><td class="code">-$navPanel.Size = Get-Size 260 552</td></tr>
+<tr class="removed"><td class="ln">949</td><td class="code">-$navPanel.Anchor = &#39;Top, Bottom, Left&#39;</td></tr>
+<tr class="removed"><td class="ln">950</td><td class="code">-$navPanel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">951</td><td class="code">-$navPanel.BorderStyle = &#39;FixedSingle&#39;</td></tr>
+<tr class="removed"><td class="ln">952</td><td class="code">-$form.Controls.Add($navPanel)</td></tr>
+<tr class="removed"><td class="ln">953</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">954</td><td class="code">-$navLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">955</td><td class="code">-$navLabel.Text = &#39;Tools&#39;</td></tr>
+<tr class="removed"><td class="ln">956</td><td class="code">-$navLabel.Font = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 10, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="removed"><td class="ln">957</td><td class="code">-$navLabel.Location = Get-Point 14 14</td></tr>
+<tr class="removed"><td class="ln">958</td><td class="code">-$navLabel.Size = Get-Size 200 24</td></tr>
+<tr class="removed"><td class="ln">959</td><td class="code">-$navLabel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">960</td><td class="code">-$navLabel.ForeColor = $script:colors.Text</td></tr>
+<tr class="removed"><td class="ln">961</td><td class="code">-$navPanel.Controls.Add($navLabel)</td></tr>
+<tr class="removed"><td class="ln">962</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">963</td><td class="code">-$toolList = New-Object System.Windows.Forms.ListBox</td></tr>
+<tr class="removed"><td class="ln">964</td><td class="code">-$toolList.Location = Get-Point 14 48</td></tr>
+<tr class="removed"><td class="ln">965</td><td class="code">-$toolList.Size = Get-Size 230 486</td></tr>
+<tr class="removed"><td class="ln">966</td><td class="code">-$toolList.Anchor = &#39;Top, Bottom, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">967</td><td class="code">-$toolList.BackColor = $script:colors.Control</td></tr>
+<tr class="removed"><td class="ln">968</td><td class="code">-$toolList.ForeColor = $script:colors.Text</td></tr>
+<tr class="removed"><td class="ln">969</td><td class="code">-$toolList.BorderStyle = &#39;FixedSingle&#39;</td></tr>
+<tr class="removed"><td class="ln">970</td><td class="code">-$toolList.Font = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 10)</td></tr>
+<tr class="added"><td class="ln">971</td><td class="code">+$navPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(16, 108, 260, 552) -Properties @{ Anchor = &#39;Top, Bottom, Left&#39;; BorderStyle = &#39;FixedSingle&#39; }</td></tr>
+<tr class="added"><td class="ln">972</td><td class="code">+$null = Add-UiControl -Parent $navPanel -Type Label -Bounds @(14, 14, 200, 24) -Properties @{ Text = &#39;Tools&#39;; Font = $script:fonts.Section }</td></tr>
+<tr class="added"><td class="ln">973</td><td class="code">+$toolList = Add-UiControl -Parent $navPanel -Type ListBox -Bounds @(14, 48, 230, 486) -Properties @{ Anchor = &#39;Top, Bottom, Left, Right&#39;; Font = $script:fonts.List }</td></tr>
+<tr class="context"><td class="ln">974</td><td class="code"> $toolList.Add_SelectedIndexChanged({</td></tr>
+<tr class="context"><td class="ln">975</td><td class="code">     if ($toolList.SelectedIndex -lt 0 -or $toolList.SelectedIndex -ge $script:tools.Count) {</td></tr>
+<tr class="context"><td class="ln">976</td><td class="code">         return</td></tr>
+<tr class="context"><td class="ln">977</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">978</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">979</td><td class="code">     Save-CurrentFieldState</td></tr>
+<tr class="context"><td class="ln">980</td><td class="code">     Show-Tool -Tool $script:tools[$toolList.SelectedIndex]</td></tr>
+<tr class="context"><td class="ln">981</td><td class="code"> })</td></tr>
+<tr class="removed"><td class="ln">982</td><td class="code">-$navPanel.Controls.Add($toolList)</td></tr>
+<tr class="context"><td class="ln">983</td><td class="code"> </td></tr>
+<tr class="removed"><td class="ln">984</td><td class="code">-$contentPanel = New-Object System.Windows.Forms.Panel</td></tr>
+<tr class="removed"><td class="ln">985</td><td class="code">-$contentPanel.Location = Get-Point 292 108</td></tr>
+<tr class="removed"><td class="ln">986</td><td class="code">-$contentPanel.Size = Get-Size 794 552</td></tr>
+<tr class="removed"><td class="ln">987</td><td class="code">-$contentPanel.Anchor = &#39;Top, Bottom, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">988</td><td class="code">-$contentPanel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">989</td><td class="code">-$contentPanel.BorderStyle = &#39;FixedSingle&#39;</td></tr>
+<tr class="removed"><td class="ln">990</td><td class="code">-$form.Controls.Add($contentPanel)</td></tr>
+<tr class="removed"><td class="ln">991</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">992</td><td class="code">-$toolTitleLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">993</td><td class="code">-$toolTitleLabel.Text = &#39;Tool&#39;</td></tr>
+<tr class="removed"><td class="ln">994</td><td class="code">-$toolTitleLabel.Font = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 15, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="removed"><td class="ln">995</td><td class="code">-$toolTitleLabel.Location = Get-Point 18 16</td></tr>
+<tr class="removed"><td class="ln">996</td><td class="code">-$toolTitleLabel.Size = Get-Size 460 34</td></tr>
+<tr class="removed"><td class="ln">997</td><td class="code">-$toolTitleLabel.Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">998</td><td class="code">-$toolTitleLabel.ForeColor = $script:colors.Text</td></tr>
+<tr class="removed"><td class="ln">999</td><td class="code">-$toolTitleLabel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">1000</td><td class="code">-$contentPanel.Controls.Add($toolTitleLabel)</td></tr>
+<tr class="removed"><td class="ln">1001</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1002</td><td class="code">-$runStateLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">1003</td><td class="code">-$runStateLabel.Text = &#39;Idle&#39;</td></tr>
+<tr class="removed"><td class="ln">1004</td><td class="code">-$runStateLabel.Font = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 10, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="removed"><td class="ln">1005</td><td class="code">-$runStateLabel.TextAlign = &#39;MiddleRight&#39;</td></tr>
+<tr class="removed"><td class="ln">1006</td><td class="code">-$runStateLabel.Location = Get-Point 580 21</td></tr>
+<tr class="removed"><td class="ln">1007</td><td class="code">-$runStateLabel.Size = Get-Size 190 24</td></tr>
+<tr class="removed"><td class="ln">1008</td><td class="code">-$runStateLabel.Anchor = &#39;Top, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">1009</td><td class="code">-$runStateLabel.ForeColor = $script:colors.Muted</td></tr>
+<tr class="removed"><td class="ln">1010</td><td class="code">-$runStateLabel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">1011</td><td class="code">-$contentPanel.Controls.Add($runStateLabel)</td></tr>
+<tr class="removed"><td class="ln">1012</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1013</td><td class="code">-$toolDescriptionLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">1014</td><td class="code">-$toolDescriptionLabel.Text = &#39;&#39;</td></tr>
+<tr class="removed"><td class="ln">1015</td><td class="code">-$toolDescriptionLabel.Location = Get-Point 20 52</td></tr>
+<tr class="removed"><td class="ln">1016</td><td class="code">-$toolDescriptionLabel.Size = Get-Size 750 38</td></tr>
+<tr class="removed"><td class="ln">1017</td><td class="code">-$toolDescriptionLabel.Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">1018</td><td class="code">-$toolDescriptionLabel.ForeColor = $script:colors.Muted</td></tr>
+<tr class="removed"><td class="ln">1019</td><td class="code">-$toolDescriptionLabel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">1020</td><td class="code">-$contentPanel.Controls.Add($toolDescriptionLabel)</td></tr>
+<tr class="removed"><td class="ln">1021</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1022</td><td class="code">-$fieldsPanel = New-Object System.Windows.Forms.Panel</td></tr>
+<tr class="removed"><td class="ln">1023</td><td class="code">-$fieldsPanel.Location = Get-Point 18 104</td></tr>
+<tr class="removed"><td class="ln">1024</td><td class="code">-$fieldsPanel.Size = Get-Size 754 176</td></tr>
+<tr class="removed"><td class="ln">1025</td><td class="code">-$fieldsPanel.Anchor = &#39;Top, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">1026</td><td class="code">-$fieldsPanel.BackColor = $script:colors.Surface</td></tr>
+<tr class="removed"><td class="ln">1027</td><td class="code">-$fieldsPanel.BorderStyle = &#39;FixedSingle&#39;</td></tr>
+<tr class="removed"><td class="ln">1028</td><td class="code">-$fieldsPanel.AutoScroll = $true</td></tr>
+<tr class="removed"><td class="ln">1029</td><td class="code">-$contentPanel.Controls.Add($fieldsPanel)</td></tr>
+<tr class="removed"><td class="ln">1030</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1031</td><td class="code">-$startButton = New-Object System.Windows.Forms.Button</td></tr>
+<tr class="removed"><td class="ln">1032</td><td class="code">-$startButton.Text = &#39;Run&#39;</td></tr>
+<tr class="removed"><td class="ln">1033</td><td class="code">-$startButton.Location = Get-Point 18 296</td></tr>
+<tr class="removed"><td class="ln">1034</td><td class="code">-$startButton.Size = Get-Size 96 34</td></tr>
+<tr class="removed"><td class="ln">1035</td><td class="code">-$startButton.Add_Click({ Invoke-SelectedTool })</td></tr>
+<tr class="removed"><td class="ln">1036</td><td class="code">-Use-ButtonTheme -Button $startButton -Primary</td></tr>
+<tr class="removed"><td class="ln">1037</td><td class="code">-$contentPanel.Controls.Add($startButton)</td></tr>
+<tr class="removed"><td class="ln">1038</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1039</td><td class="code">-$stopButton = New-Object System.Windows.Forms.Button</td></tr>
+<tr class="removed"><td class="ln">1040</td><td class="code">-$stopButton.Text = &#39;Stop&#39;</td></tr>
+<tr class="removed"><td class="ln">1041</td><td class="code">-$stopButton.Location = Get-Point 126 296</td></tr>
+<tr class="removed"><td class="ln">1042</td><td class="code">-$stopButton.Size = Get-Size 96 34</td></tr>
+<tr class="removed"><td class="ln">1043</td><td class="code">-$stopButton.Add_Click({ Invoke-SelectedToolStop })</td></tr>
+<tr class="removed"><td class="ln">1044</td><td class="code">-Use-ButtonTheme -Button $stopButton</td></tr>
+<tr class="removed"><td class="ln">1045</td><td class="code">-$contentPanel.Controls.Add($stopButton)</td></tr>
+<tr class="removed"><td class="ln">1046</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1047</td><td class="code">-$openLogsButton = New-Object System.Windows.Forms.Button</td></tr>
+<tr class="removed"><td class="ln">1048</td><td class="code">-$openLogsButton.Text = &#39;Open Logs&#39;</td></tr>
+<tr class="removed"><td class="ln">1049</td><td class="code">-$openLogsButton.Location = Get-Point 234 296</td></tr>
+<tr class="removed"><td class="ln">1050</td><td class="code">-$openLogsButton.Size = Get-Size 106 34</td></tr>
+<tr class="removed"><td class="ln">1051</td><td class="code">-$openLogsButton.Add_Click({</td></tr>
+<tr class="removed"><td class="ln">1052</td><td class="code">-    if (-not (Test-Path -LiteralPath $script:logsPath)) {</td></tr>
+<tr class="removed"><td class="ln">1053</td><td class="code">-        $null = New-Item -ItemType Directory -Path $script:logsPath -Force</td></tr>
+<tr class="removed"><td class="ln">1054</td><td class="code">-    }</td></tr>
+<tr class="added"><td class="ln">1055</td><td class="code">+$contentPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(292, 108, 794, 552) -Properties @{ Anchor = &#39;Top, Bottom, Left, Right&#39;; BorderStyle = &#39;FixedSingle&#39; }</td></tr>
+<tr class="added"><td class="ln">1056</td><td class="code">+$toolTitleLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 16, 460, 34) -Properties @{ Text = &#39;Tool&#39;; Anchor = &#39;Top, Left, Right&#39;; Font = $script:fonts.ToolTitle }</td></tr>
+<tr class="added"><td class="ln">1057</td><td class="code">+$fieldsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(18, 62, 536, 218) -Properties @{ Anchor = &#39;Top, Left, Right&#39;; BackColor = $script:colors.Surface; BorderStyle = &#39;FixedSingle&#39;; AutoScroll = $true }</td></tr>
+<tr class="added"><td class="ln">1058</td><td class="code">+$presetsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(570, 62, 202, 218) -Properties @{ Anchor = &#39;Top, Right&#39;; BackColor = $script:colors.Surface; BorderStyle = &#39;FixedSingle&#39;; Visible = $false }</td></tr>
+<tr class="added"><td class="ln">1059</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">1060</td><td class="code">+$startButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(18, 296, 96, 34) -Properties @{ Text = &#39;Run&#39; } -Setup { param($control) $control.Add_Click({ Invoke-SelectedTool }); Use-ButtonTheme -Button $control -Primary }</td></tr>
+<tr class="added"><td class="ln">1061</td><td class="code">+$stopButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(126, 296, 96, 34) -Properties @{ Text = &#39;Stop&#39; } -Setup { param($control) $control.Add_Click({ Invoke-SelectedToolStop }) }</td></tr>
+<tr class="added"><td class="ln">1062</td><td class="code">+$openLogsButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(234, 296, 106, 34) -Properties @{ Text = &#39;Open Logs&#39; } -Setup {</td></tr>
+<tr class="added"><td class="ln">1063</td><td class="code">+    param($control)</td></tr>
+<tr class="added"><td class="ln">1064</td><td class="code">+    $control.Add_Click({</td></tr>
+<tr class="added"><td class="ln">1065</td><td class="code">+    Ensure-Directory -Path $script:logsPath</td></tr>
+<tr class="context"><td class="ln">1066</td><td class="code">     Start-Process explorer.exe -ArgumentList (&#39;&quot;{0}&quot;&#39; -f $script:logsPath)</td></tr>
+<tr class="removed"><td class="ln">1067</td><td class="code">-})</td></tr>
+<tr class="removed"><td class="ln">1068</td><td class="code">-Use-ButtonTheme -Button $openLogsButton</td></tr>
+<tr class="removed"><td class="ln">1069</td><td class="code">-$contentPanel.Controls.Add($openLogsButton)</td></tr>
+<tr class="removed"><td class="ln">1070</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1071</td><td class="code">-$clearLogButton = New-Object System.Windows.Forms.Button</td></tr>
+<tr class="removed"><td class="ln">1072</td><td class="code">-$clearLogButton.Text = &#39;Clear View&#39;</td></tr>
+<tr class="removed"><td class="ln">1073</td><td class="code">-$clearLogButton.Location = Get-Point 352 296</td></tr>
+<tr class="removed"><td class="ln">1074</td><td class="code">-$clearLogButton.Size = Get-Size 100 34</td></tr>
+<tr class="removed"><td class="ln">1075</td><td class="code">-$clearLogButton.Add_Click({</td></tr>
+<tr class="added"><td class="ln">1076</td><td class="code">+    })</td></tr>
+<tr class="added"><td class="ln">1077</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">1078</td><td class="code">+$clearViewButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(352, 296, 100, 34) -Properties @{ Text = &#39;Clear View&#39; } -Setup {</td></tr>
+<tr class="added"><td class="ln">1079</td><td class="code">+    param($control)</td></tr>
+<tr class="added"><td class="ln">1080</td><td class="code">+    $control.Add_Click({</td></tr>
+<tr class="context"><td class="ln">1081</td><td class="code">     $run = Get-CurrentToolRun</td></tr>
+<tr class="context"><td class="ln">1082</td><td class="code">     if ($run -and -not [string]::IsNullOrWhiteSpace($run.LogPath)) {</td></tr>
+<tr class="context"><td class="ln">1083</td><td class="code">         $currentText = Read-SharedTextFile -Path $run.LogPath</td></tr>
+<tr class="context"><td class="ln">1084</td><td class="code">         $script:logClearOffsets[$run.LogPath] = $currentText.Length</td></tr>
+<tr class="context"><td class="ln">1085</td><td class="code">     }</td></tr>
+<tr class="context"><td class="ln">1086</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">1087</td><td class="code">     $script:lastRenderedLogText = &#39;&#39;</td></tr>
+<tr class="context"><td class="ln">1088</td><td class="code">     $logBox.Clear()</td></tr>
+<tr class="removed"><td class="ln">1089</td><td class="code">-})</td></tr>
+<tr class="removed"><td class="ln">1090</td><td class="code">-Use-ButtonTheme -Button $clearLogButton</td></tr>
+<tr class="removed"><td class="ln">1091</td><td class="code">-$contentPanel.Controls.Add($clearLogButton)</td></tr>
+<tr class="removed"><td class="ln">1092</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1093</td><td class="code">-$logLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">1094</td><td class="code">-$logLabel.Text = &#39;Console Output&#39;</td></tr>
+<tr class="removed"><td class="ln">1095</td><td class="code">-$logLabel.Font = New-Object System.Drawing.Font(&#39;Segoe UI&#39;, 10, [System.Drawing.FontStyle]::Bold)</td></tr>
+<tr class="removed"><td class="ln">1096</td><td class="code">-$logLabel.Location = Get-Point 18 348</td></tr>
+<tr class="removed"><td class="ln">1097</td><td class="code">-$logLabel.Size = Get-Size 120 24</td></tr>
+<tr class="removed"><td class="ln">1098</td><td class="code">-$logLabel.ForeColor = $script:colors.Text</td></tr>
+<tr class="removed"><td class="ln">1099</td><td class="code">-$logLabel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">1100</td><td class="code">-$contentPanel.Controls.Add($logLabel)</td></tr>
+<tr class="removed"><td class="ln">1101</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1102</td><td class="code">-$logBox = New-Object System.Windows.Forms.TextBox</td></tr>
+<tr class="removed"><td class="ln">1103</td><td class="code">-$logBox.Location = Get-Point 18 376</td></tr>
+<tr class="removed"><td class="ln">1104</td><td class="code">-$logBox.Size = Get-Size 754 112</td></tr>
+<tr class="removed"><td class="ln">1105</td><td class="code">-$logBox.Anchor = &#39;Top, Bottom, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">1106</td><td class="code">-$logBox.Multiline = $true</td></tr>
+<tr class="removed"><td class="ln">1107</td><td class="code">-$logBox.ScrollBars = &#39;Both&#39;</td></tr>
+<tr class="removed"><td class="ln">1108</td><td class="code">-$logBox.WordWrap = $false</td></tr>
+<tr class="removed"><td class="ln">1109</td><td class="code">-$logBox.ReadOnly = $true</td></tr>
+<tr class="removed"><td class="ln">1110</td><td class="code">-$logBox.Font = New-Object System.Drawing.Font(&#39;Consolas&#39;, 9)</td></tr>
+<tr class="removed"><td class="ln">1111</td><td class="code">-Use-TextBoxTheme -TextBox $logBox</td></tr>
+<tr class="removed"><td class="ln">1112</td><td class="code">-$contentPanel.Controls.Add($logBox)</td></tr>
+<tr class="removed"><td class="ln">1113</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1114</td><td class="code">-$consoleInputLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">1115</td><td class="code">-$consoleInputLabel.Text = &#39;Input&#39;</td></tr>
+<tr class="removed"><td class="ln">1116</td><td class="code">-$consoleInputLabel.Location = Get-Point 18 511</td></tr>
+<tr class="removed"><td class="ln">1117</td><td class="code">-$consoleInputLabel.Size = Get-Size 48 22</td></tr>
+<tr class="removed"><td class="ln">1118</td><td class="code">-$consoleInputLabel.Anchor = &#39;Bottom, Left&#39;</td></tr>
+<tr class="removed"><td class="ln">1119</td><td class="code">-$consoleInputLabel.ForeColor = $script:colors.Text</td></tr>
+<tr class="removed"><td class="ln">1120</td><td class="code">-$consoleInputLabel.BackColor = $script:colors.Panel</td></tr>
+<tr class="removed"><td class="ln">1121</td><td class="code">-$consoleInputLabel.Visible = $false</td></tr>
+<tr class="removed"><td class="ln">1122</td><td class="code">-$contentPanel.Controls.Add($consoleInputLabel)</td></tr>
+<tr class="removed"><td class="ln">1123</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1124</td><td class="code">-$consoleInputBox = New-Object System.Windows.Forms.TextBox</td></tr>
+<tr class="removed"><td class="ln">1125</td><td class="code">-$consoleInputBox.Location = Get-Point 76 506</td></tr>
+<tr class="removed"><td class="ln">1126</td><td class="code">-$consoleInputBox.Size = Get-Size 578 26</td></tr>
+<tr class="removed"><td class="ln">1127</td><td class="code">-$consoleInputBox.Anchor = &#39;Bottom, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">1128</td><td class="code">-$consoleInputBox.Enabled = $false</td></tr>
+<tr class="removed"><td class="ln">1129</td><td class="code">-$consoleInputBox.Visible = $false</td></tr>
+<tr class="removed"><td class="ln">1130</td><td class="code">-$consoleInputBox.Add_KeyDown({</td></tr>
+<tr class="added"><td class="ln">1131</td><td class="code">+    })</td></tr>
+<tr class="added"><td class="ln">1132</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">1133</td><td class="code">+</td></tr>
+<tr class="added"><td class="ln">1134</td><td class="code">+$consoleOutputLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 348, 120, 24) -Properties @{ Text = &#39;Console Output&#39;; Font = $script:fonts.Section }</td></tr>
+<tr class="added"><td class="ln">1135</td><td class="code">+$logBox = Add-UiControl -Parent $contentPanel -Type TextBox -Bounds @(18, 376, 754, 112) -Properties @{ Anchor = &#39;Top, Bottom, Left, Right&#39;; Multiline = $true; ScrollBars = &#39;Both&#39;; WordWrap = $false; ReadOnly = $true; Font = $script:fonts.Log }</td></tr>
+<tr class="added"><td class="ln">1136</td><td class="code">+$consoleInputLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 511, 48, 22) -Properties @{ Text = &#39;Input&#39;; Anchor = &#39;Bottom, Left&#39;; Visible = $false }</td></tr>
+<tr class="added"><td class="ln">1137</td><td class="code">+$consoleInputBox = Add-UiControl -Parent $contentPanel -Type TextBox -Bounds @(76, 506, 578, 26) -Properties @{ Anchor = &#39;Bottom, Left, Right&#39;; Enabled = $false; Visible = $false } -Setup {</td></tr>
+<tr class="added"><td class="ln">1138</td><td class="code">+    param($control)</td></tr>
+<tr class="added"><td class="ln">1139</td><td class="code">+    $control.Add_KeyDown({</td></tr>
+<tr class="context"><td class="ln">1140</td><td class="code">     param($controlSender, $keyEventArgs)</td></tr>
+<tr class="context"><td class="ln">1141</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">1142</td><td class="code">     [void]$controlSender</td></tr>
+<tr class="context"><td class="ln">1143</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">1144</td><td class="code">     if ($keyEventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {</td></tr>
+<tr class="context"><td class="ln">1145</td><td class="code">         $keyEventArgs.SuppressKeyPress = $true</td></tr>
+<tr class="context"><td class="ln">1146</td><td class="code">         Send-ConsoleInput</td></tr>
+<tr class="context"><td class="ln">1147</td><td class="code">     }</td></tr>
+<tr class="removed"><td class="ln">1148</td><td class="code">-})</td></tr>
+<tr class="removed"><td class="ln">1149</td><td class="code">-Use-TextBoxTheme -TextBox $consoleInputBox</td></tr>
+<tr class="removed"><td class="ln">1150</td><td class="code">-$contentPanel.Controls.Add($consoleInputBox)</td></tr>
+<tr class="removed"><td class="ln">1151</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1152</td><td class="code">-$sendInputButton = New-Object System.Windows.Forms.Button</td></tr>
+<tr class="removed"><td class="ln">1153</td><td class="code">-$sendInputButton.Text = &#39;Send&#39;</td></tr>
+<tr class="removed"><td class="ln">1154</td><td class="code">-$sendInputButton.Location = Get-Point 666 503</td></tr>
+<tr class="removed"><td class="ln">1155</td><td class="code">-$sendInputButton.Size = Get-Size 106 32</td></tr>
+<tr class="removed"><td class="ln">1156</td><td class="code">-$sendInputButton.Anchor = &#39;Bottom, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">1157</td><td class="code">-$sendInputButton.Enabled = $false</td></tr>
+<tr class="removed"><td class="ln">1158</td><td class="code">-$sendInputButton.Visible = $false</td></tr>
+<tr class="removed"><td class="ln">1159</td><td class="code">-$sendInputButton.Add_Click({ Send-ConsoleInput })</td></tr>
+<tr class="removed"><td class="ln">1160</td><td class="code">-Use-ButtonTheme -Button $sendInputButton -Primary</td></tr>
+<tr class="removed"><td class="ln">1161</td><td class="code">-$contentPanel.Controls.Add($sendInputButton)</td></tr>
+<tr class="removed"><td class="ln">1162</td><td class="code">-</td></tr>
+<tr class="removed"><td class="ln">1163</td><td class="code">-$statusLabel = New-Object System.Windows.Forms.Label</td></tr>
+<tr class="removed"><td class="ln">1164</td><td class="code">-$statusLabel.Text = &#39;Ready.&#39;</td></tr>
+<tr class="removed"><td class="ln">1165</td><td class="code">-$statusLabel.Location = Get-Point 18 674</td></tr>
+<tr class="removed"><td class="ln">1166</td><td class="code">-$statusLabel.Size = Get-Size 1068 24</td></tr>
+<tr class="removed"><td class="ln">1167</td><td class="code">-$statusLabel.Anchor = &#39;Bottom, Left, Right&#39;</td></tr>
+<tr class="removed"><td class="ln">1168</td><td class="code">-$statusLabel.ForeColor = $script:colors.Muted</td></tr>
+<tr class="removed"><td class="ln">1169</td><td class="code">-$statusLabel.BackColor = $script:colors.Window</td></tr>
+<tr class="removed"><td class="ln">1170</td><td class="code">-$form.Controls.Add($statusLabel)</td></tr>
+<tr class="added"><td class="ln">1171</td><td class="code">+    })</td></tr>
+<tr class="added"><td class="ln">1172</td><td class="code">+}</td></tr>
+<tr class="added"><td class="ln">1173</td><td class="code">+$sendInputButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(666, 503, 106, 32) -Properties @{ Text = &#39;Send&#39;; Anchor = &#39;Bottom, Right&#39;; Enabled = $false; Visible = $false } -Setup { param($control) $control.Add_Click({ Send-ConsoleInput }); Use-ButtonTheme -Button $control -Primary }</td></tr>
+<tr class="context"><td class="ln">1174</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">1175</td><td class="code"> $timer = New-Object System.Windows.Forms.Timer</td></tr>
+<tr class="context"><td class="ln">1176</td><td class="code"> $timer.Interval = 1000</td></tr>
+<tr class="context"><td class="ln">1177</td><td class="code"> $timer.Add_Tick({ Sync-RunningTool })</td></tr>
+<tr class="context"><td class="ln">1178</td><td class="code"> $timer.Start()</td></tr>
+<tr class="context"><td class="ln">1179</td><td class="code"> </td></tr>
+<tr class="context"><td class="ln">1180</td><td class="code"> $form.Add_FormClosing({</td></tr>
+<tr class="context"><td class="ln">1181</td><td class="code">     param($formSender, $formClosingEventArgs)</td></tr>
+</tbody>
+</table>
+</body>
+</html>
