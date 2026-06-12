@@ -29,11 +29,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-$logDirectory = Split-Path -Parent $LogPath
-if (-not [string]::IsNullOrWhiteSpace($logDirectory) -and -not (Test-Path -LiteralPath $logDirectory)) {
-    $null = New-Item -ItemType Directory -Path $logDirectory -Force
+$toolScriptRoot = if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $PSScriptRoot
 }
+elseif (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+    Split-Path -Parent $PSCommandPath
+}
+else {
+    (Get-Location).Path
+}
+. (Join-Path $toolScriptRoot 'ToolCommon.ps1')
+
+Ensure-ParentDirectory -Path $LogPath
 
 function Write-ToolOutput {
     param([AllowEmptyString()][string]$Message)

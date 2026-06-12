@@ -1,11 +1,27 @@
+$script:rootPath = if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $PSScriptRoot
+}
+elseif (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+    Split-Path -Parent $PSCommandPath
+}
+else {
+    (Get-Location).Path
+}
+$script:launcherPath = if (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+    $PSCommandPath
+}
+else {
+    Join-Path $script:rootPath 'ToolLauncher.ps1'
+}
+
 if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
-    Start-Process -FilePath powershell.exe -WorkingDirectory $PSScriptRoot -ArgumentList @(
+    Start-Process -FilePath powershell.exe -WorkingDirectory $script:rootPath -ArgumentList @(
         '-NoProfile'
         '-ExecutionPolicy'
         'Bypass'
         '-STA'
         '-File'
-        ('"{0}"' -f $PSCommandPath)
+        ('"{0}"' -f $script:launcherPath)
     )
     exit
 }
@@ -13,17 +29,14 @@ if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-. (Join-Path $PSScriptRoot 'Scripts\ToolRuntime.ps1')
+. (Join-Path $script:rootPath 'Scripts\ToolRuntime.ps1')
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-$script:rootPath = $PSScriptRoot
 $script:catalogPath = Join-Path $script:rootPath 'Tools\tools.json'
 $script:logsPath = Join-Path $script:rootPath 'Logs'
 
-if (-not (Test-Path -LiteralPath $script:logsPath)) {
-    $null = New-Item -ItemType Directory -Path $script:logsPath -Force
-}
+Ensure-Directory -Path $script:logsPath
 
 $script:tools = @()
 $script:toolRuns = @{}
@@ -47,15 +60,17 @@ $script:colors = @{
     Teal = [System.Drawing.ColorTranslator]::FromHtml('#37b9ad')
 }
 
-function Get-Point {
-    param([int]$X, [int]$Y)
-    New-Object System.Drawing.Point($X, $Y)
+$script:fonts = @{
+    AppTitle = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
+    ToolTitle = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
+    Section = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+    Field = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+    List = New-Object System.Drawing.Font('Segoe UI', 10)
+    Log = New-Object System.Drawing.Font('Consolas', 9)
 }
 
-function Get-Size {
-    param([int]$Width, [int]$Height)
-    New-Object System.Drawing.Size($Width, $Height)
-}
+function Get-Point { param([int]$X, [int]$Y) New-Object System.Drawing.Point($X, $Y) }
+function Get-Size { param([int]$Width, [int]$Height) New-Object System.Drawing.Size($Width, $Height) }
 
 function Use-ControlTheme {
     param([Parameter(Mandatory)][System.Windows.Forms.Control]$Control)
@@ -83,6 +98,53 @@ function Use-TextBoxTheme {
     $TextBox.BackColor = $script:colors.Control
     $TextBox.ForeColor = $script:colors.Text
     $TextBox.BorderStyle = 'FixedSingle'
+}
+
+function Add-UiControl {
+    param($Parent, [string]$Type, [int[]]$Bounds, [hashtable]$Properties = @{}, [scriptblock]$Setup = $null)
+
+    $control = New-Object "System.Windows.Forms.$Type"
+    $control.Location = Get-Point $Bounds[0] $Bounds[1]
+    $control.Size = Get-Size $Bounds[2] $Bounds[3]
+
+    switch ($Type) {
+        'Panel' { $control.BackColor = $script:colors.Panel }
+        'Label' {
+            $control.BackColor = $script:colors.Panel
+            $control.ForeColor = $script:colors.Text
+        }
+        'Button' { Use-ButtonTheme -Button $control }
+        'TextBox' { Use-TextBoxTheme -TextBox $control }
+        'ListBox' {
+            Use-ControlTheme -Control $control
+            $control.BorderStyle = 'FixedSingle'
+        }
+        { $_ -in 'ComboBox', 'NumericUpDown' } { Use-ControlTheme -Control $control }
+        'CheckBox' {
+            $control.BackColor = $script:colors.Surface
+            $control.ForeColor = $script:colors.Text
+        }
+    }
+
+    if ($Type -eq 'NumericUpDown') {
+        foreach ($name in 'Maximum', 'Minimum') {
+            if ($Properties.ContainsKey($name)) {
+                $control.$name = $Properties[$name]
+            }
+        }
+    }
+    foreach ($name in @($Properties.Keys | Where-Object { $_ -ne 'Value' -and ($Type -ne 'NumericUpDown' -or $_ -notin @('Minimum', 'Maximum')) })) {
+        $control.$name = $Properties[$name]
+    }
+    if ($Properties.ContainsKey('Value')) {
+        $control.Value = $Properties['Value']
+    }
+    if ($Setup) {
+        & $Setup $control
+    }
+
+    $Parent.Controls.Add($control)
+    return $control
 }
 
 function Get-FieldKey {
@@ -143,22 +205,11 @@ function Save-CurrentFieldState {
         $control = $entry.Control
         $key = Get-FieldKey -Tool $script:currentTool -Field $field
 
-        switch ([string]$field.type) {
-            'number' {
-                $script:toolValues[$key] = [int]$control.Value
-            }
-            'checkbox' {
-                $script:toolValues[$key] = [bool]$control.Checked
-            }
-            'choice' {
-                $script:toolValues[$key] = [string]$control.SelectedItem
-            }
-            'password' {
-                $script:toolValues[$key] = [string]$control.Text
-            }
-            default {
-                $script:toolValues[$key] = [string]$control.Text
-            }
+        $script:toolValues[$key] = switch ([string]$field.type) {
+            'number' { [int]$control.Value }
+            'checkbox' { [bool]$control.Checked }
+            'choice' { [string]$control.SelectedItem }
+            default { [string]$control.Text }
         }
     }
 }
@@ -260,7 +311,7 @@ function Show-LogView {
         $logBox.Clear()
     }
 
-    $text = Read-SharedTextFile -Path $run.LogPath
+    $text = Read-SharedTextFile -Path $run.LogPath -ErrorPrefix 'Unable to read log file yet'
     if ($script:logClearOffsets.ContainsKey($run.LogPath)) {
         $clearOffset = [int]$script:logClearOffsets[$run.LogPath]
         if ($clearOffset -le $text.Length) {
@@ -286,91 +337,70 @@ function Show-FieldControl {
         [Parameter(Mandatory)][int]$Y
     )
 
-    $label = New-Object System.Windows.Forms.Label
-    $label.Text = [string]$Field.label
-    $label.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
-    $label.ForeColor = $script:colors.Text
-    $label.BackColor = $script:colors.Surface
-    $label.Location = Get-Point 18 $Y
-    $label.Size = Get-Size 220 22
-    $fieldsPanel.Controls.Add($label)
+    $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, $Y, 220, 22) -Properties @{
+        Text = [string]$Field.label
+        Font = $script:fonts.Field
+        BackColor = $script:colors.Surface
+    }
 
     $fieldType = [string]$Field.type
     $savedValue = Get-SavedFieldValue -Tool $Tool -Field $Field
-    $control = $null
 
     switch ($fieldType) {
         'number' {
-            $control = New-Object System.Windows.Forms.NumericUpDown
-            $control.Minimum = if ($null -ne $Field.minimum) { [decimal]$Field.minimum } else { 0 }
-            $control.Maximum = if ($null -ne $Field.maximum) { [decimal]$Field.maximum } else { 999999 }
-            $control.Value = [decimal]$savedValue
-            $control.Location = Get-Point 250 ($Y - 3)
-            $control.Size = Get-Size 120 26
-            Use-ControlTheme -Control $control
+            $minimum = if ($null -ne $Field.minimum) { [decimal]$Field.minimum } else { 0 }
+            $maximum = if ($null -ne $Field.maximum) { [decimal]$Field.maximum } else { 999999 }
+            $control = Add-UiControl -Parent $fieldsPanel -Type NumericUpDown -Bounds @(250, ($Y - 3), 120, 26) -Properties @{
+                Minimum = $minimum
+                Maximum = $maximum
+                Value = [decimal]$savedValue
+            }
         }
 
         'checkbox' {
-            $control = New-Object System.Windows.Forms.CheckBox
-            $control.Checked = [bool]$savedValue
-            $control.Text = 'Enabled'
-            $control.Location = Get-Point 250 ($Y - 2)
-            $control.Size = Get-Size 130 26
-            $control.BackColor = $script:colors.Surface
-            $control.ForeColor = $script:colors.Text
+            $control = Add-UiControl -Parent $fieldsPanel -Type CheckBox -Bounds @(250, ($Y - 2), 130, 26) -Properties @{
+                Text = 'Enabled'
+                Checked = [bool]$savedValue
+            }
         }
 
         'choice' {
-            $control = New-Object System.Windows.Forms.ComboBox
-            $control.DropDownStyle = 'DropDownList'
-            foreach ($option in @($Field.options)) {
-                $null = $control.Items.Add([string]$option)
+            $control = Add-UiControl -Parent $fieldsPanel -Type ComboBox -Bounds @(250, ($Y - 3), 260, 26) -Properties @{
+                DropDownStyle = 'DropDownList'
+            } -Setup {
+                param($control)
+                foreach ($option in @($Field.options)) {
+                    $null = $control.Items.Add([string]$option)
+                }
+                if ($control.Items.Count -gt 0) {
+                    $selectedIndex = $control.Items.IndexOf([string]$savedValue)
+                    $control.SelectedIndex = if ($selectedIndex -ge 0) { $selectedIndex } else { 0 }
+                }
             }
-            if ($control.Items.Count -gt 0) {
-                $selectedIndex = $control.Items.IndexOf([string]$savedValue)
-                $control.SelectedIndex = if ($selectedIndex -ge 0) { $selectedIndex } else { 0 }
-            }
-            $control.Location = Get-Point 250 ($Y - 3)
-            $control.Size = Get-Size 260 26
-            Use-ControlTheme -Control $control
-        }
-
-        'password' {
-            $control = New-Object System.Windows.Forms.TextBox
-            $control.Text = [string]$savedValue
-            $control.UseSystemPasswordChar = $true
-            $control.Location = Get-Point 250 ($Y - 3)
-            $control.Size = Get-Size 420 26
-            $control.Anchor = 'Top, Left, Right'
-            Use-TextBoxTheme -TextBox $control
         }
 
         default {
-            $control = New-Object System.Windows.Forms.TextBox
-            $control.Text = [string]$savedValue
-            $control.Location = Get-Point 250 ($Y - 3)
-            $control.Size = Get-Size 420 26
-            $control.Anchor = 'Top, Left, Right'
-            Use-TextBoxTheme -TextBox $control
+            $control = Add-UiControl -Parent $fieldsPanel -Type TextBox -Bounds @(250, ($Y - 3), 420, 26) -Properties @{
+                Text = [string]$savedValue
+                Anchor = 'Top, Left, Right'
+                UseSystemPasswordChar = ($fieldType -eq 'password')
+            }
         }
     }
 
     if ($Field.help) {
-        $helpLabel = New-Object System.Windows.Forms.Label
-        $helpLabel.Text = [string]$Field.help
-        $helpLabel.ForeColor = $script:colors.Muted
-        $helpLabel.BackColor = $script:colors.Surface
-        $helpLabel.Location = Get-Point 18 ($Y + 24)
-        $helpLabel.Size = Get-Size 650 18
-        $helpLabel.Anchor = 'Top, Left, Right'
-        $fieldsPanel.Controls.Add($helpLabel)
+        $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, ($Y + 24), 650, 18) -Properties @{
+            Text = [string]$Field.help
+            Anchor = 'Top, Left, Right'
+            ForeColor = $script:colors.Muted
+            BackColor = $script:colors.Surface
+        }
         $rowHeight = 58
     }
     else {
         $rowHeight = 42
     }
 
-    $fieldsPanel.Controls.Add($control)
     $script:fieldControls[$Field.name] = @{
         Field = $Field
         Control = $control
@@ -395,13 +425,11 @@ function Show-Tool {
     }
 
     if (@($Tool.fields).Count -eq 0) {
-        $emptyLabel = New-Object System.Windows.Forms.Label
-        $emptyLabel.Text = 'No configurable fields.'
-        $emptyLabel.Location = Get-Point 18 18
-        $emptyLabel.Size = Get-Size 300 22
-        $emptyLabel.ForeColor = $script:colors.Muted
-        $emptyLabel.BackColor = $script:colors.Surface
-        $fieldsPanel.Controls.Add($emptyLabel)
+        $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, 18, 300, 22) -Properties @{
+            Text = 'No configurable fields.'
+            ForeColor = $script:colors.Muted
+            BackColor = $script:colors.Surface
+        }
     }
 
     Show-CurrentToolStatus
@@ -550,48 +578,12 @@ $form.Size = Get-Size 1120 740
 $form.BackColor = $script:colors.Window
 $form.ForeColor = $script:colors.Text
 
-$topPanel = New-Object System.Windows.Forms.Panel
-$topPanel.Location = Get-Point 16 14
-$topPanel.Size = Get-Size 1070 80
-$topPanel.Anchor = 'Top, Left, Right'
-$topPanel.BackColor = $script:colors.Panel
-$topPanel.BorderStyle = 'FixedSingle'
-$form.Controls.Add($topPanel)
+$topPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(16, 14, 1070, 80) -Properties @{ Anchor = 'Top, Left, Right'; BorderStyle = 'FixedSingle' }
+$null = Add-UiControl -Parent $topPanel -Type Label -Bounds @(16, 13, 360, 30) -Properties @{ Text = 'Troubleshooter Test Tools'; Font = $script:fonts.AppTitle }
 
-$appTitleLabel = New-Object System.Windows.Forms.Label
-$appTitleLabel.Text = 'Troubleshooter Test Tools'
-$appTitleLabel.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
-$appTitleLabel.Location = Get-Point 16 13
-$appTitleLabel.Size = Get-Size 360 30
-$appTitleLabel.ForeColor = $script:colors.Text
-$appTitleLabel.BackColor = $script:colors.Panel
-$topPanel.Controls.Add($appTitleLabel)
-
-$navPanel = New-Object System.Windows.Forms.Panel
-$navPanel.Location = Get-Point 16 108
-$navPanel.Size = Get-Size 260 552
-$navPanel.Anchor = 'Top, Bottom, Left'
-$navPanel.BackColor = $script:colors.Panel
-$navPanel.BorderStyle = 'FixedSingle'
-$form.Controls.Add($navPanel)
-
-$navLabel = New-Object System.Windows.Forms.Label
-$navLabel.Text = 'Tools'
-$navLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
-$navLabel.Location = Get-Point 14 14
-$navLabel.Size = Get-Size 200 24
-$navLabel.BackColor = $script:colors.Panel
-$navLabel.ForeColor = $script:colors.Text
-$navPanel.Controls.Add($navLabel)
-
-$toolList = New-Object System.Windows.Forms.ListBox
-$toolList.Location = Get-Point 14 48
-$toolList.Size = Get-Size 230 486
-$toolList.Anchor = 'Top, Bottom, Left, Right'
-$toolList.BackColor = $script:colors.Control
-$toolList.ForeColor = $script:colors.Text
-$toolList.BorderStyle = 'FixedSingle'
-$toolList.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+$navPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(16, 108, 260, 552) -Properties @{ Anchor = 'Top, Bottom, Left'; BorderStyle = 'FixedSingle' }
+$null = Add-UiControl -Parent $navPanel -Type Label -Bounds @(14, 14, 200, 24) -Properties @{ Text = 'Tools'; Font = $script:fonts.Section }
+$toolList = Add-UiControl -Parent $navPanel -Type ListBox -Bounds @(14, 48, 230, 486) -Properties @{ Anchor = 'Top, Bottom, Left, Right'; Font = $script:fonts.List }
 $toolList.Add_SelectedIndexChanged({
     if ($toolList.SelectedIndex -lt 0 -or $toolList.SelectedIndex -ge $script:tools.Count) {
         return
@@ -600,89 +592,25 @@ $toolList.Add_SelectedIndexChanged({
     Save-CurrentFieldState
     Show-Tool -Tool $script:tools[$toolList.SelectedIndex]
 })
-$navPanel.Controls.Add($toolList)
 
-$contentPanel = New-Object System.Windows.Forms.Panel
-$contentPanel.Location = Get-Point 292 108
-$contentPanel.Size = Get-Size 794 552
-$contentPanel.Anchor = 'Top, Bottom, Left, Right'
-$contentPanel.BackColor = $script:colors.Panel
-$contentPanel.BorderStyle = 'FixedSingle'
-$form.Controls.Add($contentPanel)
+$contentPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(292, 108, 794, 552) -Properties @{ Anchor = 'Top, Bottom, Left, Right'; BorderStyle = 'FixedSingle' }
+$toolTitleLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 16, 460, 34) -Properties @{ Text = 'Tool'; Anchor = 'Top, Left, Right'; Font = $script:fonts.ToolTitle }
+$runStateLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(580, 21, 190, 24) -Properties @{ Text = 'Idle'; Anchor = 'Top, Right'; Font = $script:fonts.Section; TextAlign = 'MiddleRight'; ForeColor = $script:colors.Muted }
+$toolDescriptionLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(20, 52, 750, 38) -Properties @{ Text = ''; Anchor = 'Top, Left, Right'; ForeColor = $script:colors.Muted }
+$fieldsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(18, 104, 754, 176) -Properties @{ Anchor = 'Top, Left, Right'; BackColor = $script:colors.Surface; BorderStyle = 'FixedSingle'; AutoScroll = $true }
 
-$toolTitleLabel = New-Object System.Windows.Forms.Label
-$toolTitleLabel.Text = 'Tool'
-$toolTitleLabel.Font = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
-$toolTitleLabel.Location = Get-Point 18 16
-$toolTitleLabel.Size = Get-Size 460 34
-$toolTitleLabel.Anchor = 'Top, Left, Right'
-$toolTitleLabel.ForeColor = $script:colors.Text
-$toolTitleLabel.BackColor = $script:colors.Panel
-$contentPanel.Controls.Add($toolTitleLabel)
-
-$runStateLabel = New-Object System.Windows.Forms.Label
-$runStateLabel.Text = 'Idle'
-$runStateLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
-$runStateLabel.TextAlign = 'MiddleRight'
-$runStateLabel.Location = Get-Point 580 21
-$runStateLabel.Size = Get-Size 190 24
-$runStateLabel.Anchor = 'Top, Right'
-$runStateLabel.ForeColor = $script:colors.Muted
-$runStateLabel.BackColor = $script:colors.Panel
-$contentPanel.Controls.Add($runStateLabel)
-
-$toolDescriptionLabel = New-Object System.Windows.Forms.Label
-$toolDescriptionLabel.Text = ''
-$toolDescriptionLabel.Location = Get-Point 20 52
-$toolDescriptionLabel.Size = Get-Size 750 38
-$toolDescriptionLabel.Anchor = 'Top, Left, Right'
-$toolDescriptionLabel.ForeColor = $script:colors.Muted
-$toolDescriptionLabel.BackColor = $script:colors.Panel
-$contentPanel.Controls.Add($toolDescriptionLabel)
-
-$fieldsPanel = New-Object System.Windows.Forms.Panel
-$fieldsPanel.Location = Get-Point 18 104
-$fieldsPanel.Size = Get-Size 754 176
-$fieldsPanel.Anchor = 'Top, Left, Right'
-$fieldsPanel.BackColor = $script:colors.Surface
-$fieldsPanel.BorderStyle = 'FixedSingle'
-$fieldsPanel.AutoScroll = $true
-$contentPanel.Controls.Add($fieldsPanel)
-
-$startButton = New-Object System.Windows.Forms.Button
-$startButton.Text = 'Run'
-$startButton.Location = Get-Point 18 296
-$startButton.Size = Get-Size 96 34
-$startButton.Add_Click({ Invoke-SelectedTool })
-Use-ButtonTheme -Button $startButton -Primary
-$contentPanel.Controls.Add($startButton)
-
-$stopButton = New-Object System.Windows.Forms.Button
-$stopButton.Text = 'Stop'
-$stopButton.Location = Get-Point 126 296
-$stopButton.Size = Get-Size 96 34
-$stopButton.Add_Click({ Invoke-SelectedToolStop })
-Use-ButtonTheme -Button $stopButton
-$contentPanel.Controls.Add($stopButton)
-
-$openLogsButton = New-Object System.Windows.Forms.Button
-$openLogsButton.Text = 'Open Logs'
-$openLogsButton.Location = Get-Point 234 296
-$openLogsButton.Size = Get-Size 106 34
-$openLogsButton.Add_Click({
-    if (-not (Test-Path -LiteralPath $script:logsPath)) {
-        $null = New-Item -ItemType Directory -Path $script:logsPath -Force
-    }
+$startButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(18, 296, 96, 34) -Properties @{ Text = 'Run' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedTool }); Use-ButtonTheme -Button $control -Primary }
+$stopButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(126, 296, 96, 34) -Properties @{ Text = 'Stop' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedToolStop }) }
+$null = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(234, 296, 106, 34) -Properties @{ Text = 'Open Logs' } -Setup {
+    param($control)
+    $control.Add_Click({
+    Ensure-Directory -Path $script:logsPath
     Start-Process explorer.exe -ArgumentList ('"{0}"' -f $script:logsPath)
-})
-Use-ButtonTheme -Button $openLogsButton
-$contentPanel.Controls.Add($openLogsButton)
-
-$clearLogButton = New-Object System.Windows.Forms.Button
-$clearLogButton.Text = 'Clear View'
-$clearLogButton.Location = Get-Point 352 296
-$clearLogButton.Size = Get-Size 100 34
-$clearLogButton.Add_Click({
+    })
+}
+$null = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(352, 296, 100, 34) -Properties @{ Text = 'Clear View' } -Setup {
+    param($control)
+    $control.Add_Click({
     $run = Get-CurrentToolRun
     if ($run -and -not [string]::IsNullOrWhiteSpace($run.LogPath)) {
         $currentText = Read-SharedTextFile -Path $run.LogPath
@@ -691,48 +619,15 @@ $clearLogButton.Add_Click({
 
     $script:lastRenderedLogText = ''
     $logBox.Clear()
-})
-Use-ButtonTheme -Button $clearLogButton
-$contentPanel.Controls.Add($clearLogButton)
+    })
+}
 
-$logLabel = New-Object System.Windows.Forms.Label
-$logLabel.Text = 'Console Output'
-$logLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
-$logLabel.Location = Get-Point 18 348
-$logLabel.Size = Get-Size 120 24
-$logLabel.ForeColor = $script:colors.Text
-$logLabel.BackColor = $script:colors.Panel
-$contentPanel.Controls.Add($logLabel)
-
-$logBox = New-Object System.Windows.Forms.TextBox
-$logBox.Location = Get-Point 18 376
-$logBox.Size = Get-Size 754 112
-$logBox.Anchor = 'Top, Bottom, Left, Right'
-$logBox.Multiline = $true
-$logBox.ScrollBars = 'Both'
-$logBox.WordWrap = $false
-$logBox.ReadOnly = $true
-$logBox.Font = New-Object System.Drawing.Font('Consolas', 9)
-Use-TextBoxTheme -TextBox $logBox
-$contentPanel.Controls.Add($logBox)
-
-$consoleInputLabel = New-Object System.Windows.Forms.Label
-$consoleInputLabel.Text = 'Input'
-$consoleInputLabel.Location = Get-Point 18 511
-$consoleInputLabel.Size = Get-Size 48 22
-$consoleInputLabel.Anchor = 'Bottom, Left'
-$consoleInputLabel.ForeColor = $script:colors.Text
-$consoleInputLabel.BackColor = $script:colors.Panel
-$consoleInputLabel.Visible = $false
-$contentPanel.Controls.Add($consoleInputLabel)
-
-$consoleInputBox = New-Object System.Windows.Forms.TextBox
-$consoleInputBox.Location = Get-Point 76 506
-$consoleInputBox.Size = Get-Size 578 26
-$consoleInputBox.Anchor = 'Bottom, Left, Right'
-$consoleInputBox.Enabled = $false
-$consoleInputBox.Visible = $false
-$consoleInputBox.Add_KeyDown({
+$null = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 348, 120, 24) -Properties @{ Text = 'Console Output'; Font = $script:fonts.Section }
+$logBox = Add-UiControl -Parent $contentPanel -Type TextBox -Bounds @(18, 376, 754, 112) -Properties @{ Anchor = 'Top, Bottom, Left, Right'; Multiline = $true; ScrollBars = 'Both'; WordWrap = $false; ReadOnly = $true; Font = $script:fonts.Log }
+$consoleInputLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 511, 48, 22) -Properties @{ Text = 'Input'; Anchor = 'Bottom, Left'; Visible = $false }
+$consoleInputBox = Add-UiControl -Parent $contentPanel -Type TextBox -Bounds @(76, 506, 578, 26) -Properties @{ Anchor = 'Bottom, Left, Right'; Enabled = $false; Visible = $false } -Setup {
+    param($control)
+    $control.Add_KeyDown({
     param($controlSender, $keyEventArgs)
 
     [void]$controlSender
@@ -741,29 +636,10 @@ $consoleInputBox.Add_KeyDown({
         $keyEventArgs.SuppressKeyPress = $true
         Send-ConsoleInput
     }
-})
-Use-TextBoxTheme -TextBox $consoleInputBox
-$contentPanel.Controls.Add($consoleInputBox)
-
-$sendInputButton = New-Object System.Windows.Forms.Button
-$sendInputButton.Text = 'Send'
-$sendInputButton.Location = Get-Point 666 503
-$sendInputButton.Size = Get-Size 106 32
-$sendInputButton.Anchor = 'Bottom, Right'
-$sendInputButton.Enabled = $false
-$sendInputButton.Visible = $false
-$sendInputButton.Add_Click({ Send-ConsoleInput })
-Use-ButtonTheme -Button $sendInputButton -Primary
-$contentPanel.Controls.Add($sendInputButton)
-
-$statusLabel = New-Object System.Windows.Forms.Label
-$statusLabel.Text = 'Ready.'
-$statusLabel.Location = Get-Point 18 674
-$statusLabel.Size = Get-Size 1068 24
-$statusLabel.Anchor = 'Bottom, Left, Right'
-$statusLabel.ForeColor = $script:colors.Muted
-$statusLabel.BackColor = $script:colors.Window
-$form.Controls.Add($statusLabel)
+    })
+}
+$sendInputButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(666, 503, 106, 32) -Properties @{ Text = 'Send'; Anchor = 'Bottom, Right'; Enabled = $false; Visible = $false } -Setup { param($control) $control.Add_Click({ Send-ConsoleInput }); Use-ButtonTheme -Button $control -Primary }
+$statusLabel = Add-UiControl -Parent $form -Type Label -Bounds @(18, 674, 1068, 24) -Properties @{ Text = 'Ready.'; Anchor = 'Bottom, Left, Right'; ForeColor = $script:colors.Muted; BackColor = $script:colors.Window }
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 1000

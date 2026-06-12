@@ -19,21 +19,19 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-$logDirectory = Split-Path -Parent $LogPath
-if (-not [string]::IsNullOrWhiteSpace($logDirectory) -and -not (Test-Path -LiteralPath $logDirectory)) {
-    $null = New-Item -ItemType Directory -Path $logDirectory -Force
+$toolScriptRoot = if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $PSScriptRoot
 }
+elseif (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+    Split-Path -Parent $PSCommandPath
+}
+else {
+    (Get-Location).Path
+}
+. (Join-Path $toolScriptRoot 'ToolCommon.ps1')
 
 if (-not [string]::IsNullOrWhiteSpace($InputPath)) {
-    $inputDirectory = Split-Path -Parent $InputPath
-    if (-not [string]::IsNullOrWhiteSpace($inputDirectory) -and -not (Test-Path -LiteralPath $inputDirectory)) {
-        $null = New-Item -ItemType Directory -Path $inputDirectory -Force
-    }
-
-    if (-not (Test-Path -LiteralPath $InputPath)) {
-        Set-Content -LiteralPath $InputPath -Value '' -NoNewline -Encoding UTF8
-    }
+    Ensure-TextFile -Path $InputPath
 }
 
 $script:TelnetIac = 255
@@ -51,9 +49,7 @@ $script:SubnegotiationIac = $false
 $script:InputLineIndex = 0
 $script:TextEncoding = [System.Text.Encoding]::ASCII
 
-$logStream = [System.IO.File]::Open($LogPath, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
-$script:LogWriter = New-Object System.IO.StreamWriter -ArgumentList $logStream, ([System.Text.Encoding]::UTF8)
-$script:LogWriter.AutoFlush = $true
+$script:LogWriter = New-SharedLogWriter -Path $LogPath
 
 function Write-StatusLog {
     param([Parameter(Mandatory)][string]$Message)
@@ -72,34 +68,6 @@ function Write-ReceivedText {
 
     $script:LogWriter.Write($Text)
     Write-Host -NoNewline $Text
-}
-
-function Read-SharedTextFile {
-    param([Parameter(Mandatory)][string]$Path)
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return ''
-    }
-
-    $stream = $null
-    $reader = $null
-
-    try {
-        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-        $reader = New-Object System.IO.StreamReader -ArgumentList $stream, ([System.Text.Encoding]::UTF8)
-        return $reader.ReadToEnd()
-    }
-    catch {
-        return ''
-    }
-    finally {
-        if ($reader) {
-            $reader.Dispose()
-        }
-        elseif ($stream) {
-            $stream.Dispose()
-        }
-    }
 }
 
 function New-ConnectedTcpClient {

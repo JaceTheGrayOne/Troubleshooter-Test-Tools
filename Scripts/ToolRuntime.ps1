@@ -1,4 +1,14 @@
 $ErrorActionPreference = 'Stop'
+$toolRuntimeRoot = if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $PSScriptRoot
+}
+elseif (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+    Split-Path -Parent $PSCommandPath
+}
+else {
+    Join-Path (Get-Location) 'Scripts'
+}
+. (Join-Path $toolRuntimeRoot 'ToolCommon.ps1')
 
 function Get-ToolDefinitions {
     param([Parameter(Mandatory)][string]$CatalogPath)
@@ -128,9 +138,7 @@ function Start-ConfiguredTool {
         [Parameter(Mandatory)][hashtable]$FieldValues
     )
 
-    if (-not (Test-Path -LiteralPath $LogsPath)) {
-        $null = New-Item -ItemType Directory -Path $LogsPath -Force
-    }
+    Ensure-Directory -Path $LogsPath
 
     $scriptPath = Resolve-ToolPath -RootPath $RootPath -Path ([string]$Tool.script)
     if (-not (Test-Path -LiteralPath $scriptPath)) {
@@ -144,7 +152,7 @@ function Start-ConfiguredTool {
 
     if ($Tool.interactiveInput -and [bool]$Tool.interactiveInput) {
         $inputPath = Join-Path $LogsPath ('{0}-{1}.input.jsonl' -f $logName, $timestamp)
-        Set-Content -LiteralPath $inputPath -Value '' -NoNewline -Encoding UTF8
+        Ensure-TextFile -Path $inputPath
     }
 
     $command = New-PowerShellWorkerCommand -ScriptPath $scriptPath -Tool $Tool -FieldValues $FieldValues -LogPath $logPath -InputPath $inputPath
@@ -173,9 +181,7 @@ function Send-ToolRunInput {
         throw 'The selected tool run does not accept console input.'
     }
 
-    if (-not (Test-Path -LiteralPath $Run.InputPath)) {
-        Set-Content -LiteralPath $Run.InputPath -Value '' -NoNewline -Encoding UTF8
-    }
+    Ensure-TextFile -Path $Run.InputPath
 
     $entry = [pscustomobject]@{
         submittedAt = (Get-Date).ToString('o')
@@ -208,33 +214,5 @@ function Stop-ToolRun {
 
     if ($Run.Process.HasExited) {
         $Run.ExitCode = $Run.Process.ExitCode
-    }
-}
-
-function Read-SharedTextFile {
-    param([Parameter(Mandatory)][string]$Path)
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return ''
-    }
-
-    $stream = $null
-    $reader = $null
-
-    try {
-        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-        $reader = New-Object System.IO.StreamReader($stream)
-        return $reader.ReadToEnd()
-    }
-    catch {
-        return "Unable to read log file yet: $($_.Exception.Message)"
-    }
-    finally {
-        if ($reader) {
-            $reader.Dispose()
-        }
-        elseif ($stream) {
-            $stream.Dispose()
-        }
     }
 }
