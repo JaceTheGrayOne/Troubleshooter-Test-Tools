@@ -19,6 +19,8 @@ if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
         '-NoProfile'
         '-ExecutionPolicy'
         'Bypass'
+        '-WindowStyle'
+        'Hidden'
         '-STA'
         '-File'
         ('"{0}"' -f $script:launcherPath)
@@ -28,6 +30,18 @@ if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class LauncherWindow {
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+}
+'@
 
 . (Join-Path $script:rootPath 'Scripts\ToolRuntime.ps1')
 
@@ -179,6 +193,48 @@ function Test-ToolInteractiveInput {
     param([AllowNull()]$Tool)
 
     return ($Tool -and $Tool.interactiveInput -and [bool]$Tool.interactiveInput)
+}
+
+function Test-LaunchOnlyTool {
+    param([AllowNull()]$Tool)
+
+    return ($Tool -and
+        ($Tool.PSObject.Properties.Name -contains 'launchPath') -and
+        -not [string]::IsNullOrWhiteSpace($Tool.launchPath))
+}
+
+function Get-StartButtonText {
+    param([AllowNull()]$Tool)
+
+    if ($Tool -and
+        ($Tool.PSObject.Properties.Name -contains 'launchButtonText') -and
+        -not [string]::IsNullOrWhiteSpace($Tool.launchButtonText)) {
+        return [string]$Tool.launchButtonText
+    }
+
+    if (Test-LaunchOnlyTool -Tool $Tool) {
+        return 'Launch'
+    }
+
+    return 'Run'
+}
+
+function Use-ToolLayout {
+    param([AllowNull()]$Tool)
+
+    $isLaunchOnly = Test-LaunchOnlyTool -Tool $Tool
+
+    $startButton.Text = Get-StartButtonText -Tool $Tool
+    $startButton.Location = if ($isLaunchOnly) { Get-Point 18 62 } else { Get-Point 18 296 }
+    $startButton.Size = if ($isLaunchOnly) { Get-Size 140 34 } else { Get-Size 96 34 }
+
+    $fieldsPanel.Visible = -not $isLaunchOnly
+    $presetsPanel.Visible = $false
+    $stopButton.Visible = -not $isLaunchOnly
+    $openLogsButton.Visible = -not $isLaunchOnly
+    $clearViewButton.Visible = -not $isLaunchOnly
+    $consoleOutputLabel.Visible = -not $isLaunchOnly
+    $logBox.Visible = -not $isLaunchOnly
 }
 
 function Get-SavedFieldValue {
@@ -426,6 +482,31 @@ function Invoke-ProtocolSelectionChanged {
     Show-Tool -Tool $script:currentTool
 }
 
+function Invoke-LaunchOnlyTool {
+    param([Parameter(Mandatory)]$Tool)
+
+    $launchPath = [string]$Tool.launchPath
+    if ([string]::IsNullOrWhiteSpace($launchPath)) {
+        throw "Tool '$($Tool.name)' has no launch path configured."
+    }
+
+    if ($launchPath -like 'ENTER_*_PATH_HERE') {
+        throw "Tool '$($Tool.name)' still has placeholder launch path '$launchPath'."
+    }
+
+    $resolvedPath = Resolve-ToolPath -RootPath $script:rootPath -Path $launchPath
+    if (-not (Test-Path -LiteralPath $resolvedPath)) {
+        throw "Launch path not found: $resolvedPath"
+    }
+
+    $workingDirectory = Split-Path -Parent $resolvedPath
+    if ([string]::IsNullOrWhiteSpace($workingDirectory)) {
+        $workingDirectory = $script:rootPath
+    }
+
+    Start-Process -FilePath $resolvedPath -WorkingDirectory $workingDirectory
+}
+
 function Apply-ToolPreset {
     param([Parameter(Mandatory)]$Preset)
 
@@ -598,27 +679,31 @@ function Show-Tool {
         $script:fieldControls = @{}
         Initialize-ToolFieldValues -Tool $Tool
         $fieldsPanel.Controls.Clear()
+        $presetsPanel.Controls.Clear()
+        Use-ToolLayout -Tool $Tool
 
         $toolTitleLabel.Text = [string]$Tool.name
 
-        $y = 18
-        $visibleFieldCount = 0
-        foreach ($field in @($Tool.fields)) {
-            if (Test-FieldVisible -Tool $Tool -Field $field) {
-                $visibleFieldCount++
-                $y = Show-FieldControl -Tool $Tool -Field $field -Y $y
+        if (-not (Test-LaunchOnlyTool -Tool $Tool)) {
+            $y = 18
+            $visibleFieldCount = 0
+            foreach ($field in @($Tool.fields)) {
+                if (Test-FieldVisible -Tool $Tool -Field $field) {
+                    $visibleFieldCount++
+                    $y = Show-FieldControl -Tool $Tool -Field $field -Y $y
+                }
             }
-        }
 
-        if ($visibleFieldCount -eq 0) {
-            $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, 18, 300, 22) -Properties @{
-                Text = 'No configurable fields.'
-                ForeColor = $script:colors.Muted
-                BackColor = $script:colors.Surface
+            if ($visibleFieldCount -eq 0) {
+                $null = Add-UiControl -Parent $fieldsPanel -Type Label -Bounds @(18, 18, 300, 22) -Properties @{
+                    Text = 'No configurable fields.'
+                    ForeColor = $script:colors.Muted
+                    BackColor = $script:colors.Surface
+                }
             }
-        }
 
-        Show-PresetButtons -Tool $Tool
+            Show-PresetButtons -Tool $Tool
+        }
     }
     finally {
         $script:suppressFieldEvents = $false
@@ -659,6 +744,17 @@ function Import-ToolCatalog {
 
 function Invoke-SelectedTool {
     if (-not $script:currentTool) {
+        return
+    }
+
+    if (Test-LaunchOnlyTool -Tool $script:currentTool) {
+        try {
+            Invoke-LaunchOnlyTool -Tool $script:currentTool
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Launch Failed', 'OK', 'Error') | Out-Null
+        }
+
         return
     }
 
@@ -766,6 +862,10 @@ $form.MinimumSize = Get-Size 980 640
 $form.Size = Get-Size 1120 740
 $form.BackColor = $script:colors.Window
 $form.ForeColor = $script:colors.Text
+$form.Add_Shown({
+    [LauncherWindow]::ShowWindow($form.Handle, 5) | Out-Null
+    [LauncherWindow]::SetForegroundWindow($form.Handle) | Out-Null
+})
 
 $topPanel = Add-UiControl -Parent $form -Type Panel -Bounds @(16, 14, 1070, 80) -Properties @{ Anchor = 'Top, Left, Right'; BorderStyle = 'FixedSingle' }
 $null = Add-UiControl -Parent $topPanel -Type Label -Bounds @(16, 13, 360, 30) -Properties @{ Text = 'Troubleshooter Test Tools'; Font = $script:fonts.AppTitle }
@@ -789,14 +889,14 @@ $presetsPanel = Add-UiControl -Parent $contentPanel -Type Panel -Bounds @(570, 6
 
 $startButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(18, 296, 96, 34) -Properties @{ Text = 'Run' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedTool }); Use-ButtonTheme -Button $control -Primary }
 $stopButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(126, 296, 96, 34) -Properties @{ Text = 'Stop' } -Setup { param($control) $control.Add_Click({ Invoke-SelectedToolStop }) }
-$null = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(234, 296, 106, 34) -Properties @{ Text = 'Open Logs' } -Setup {
+$openLogsButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(234, 296, 106, 34) -Properties @{ Text = 'Open Logs' } -Setup {
     param($control)
     $control.Add_Click({
     Ensure-Directory -Path $script:logsPath
     Start-Process explorer.exe -ArgumentList ('"{0}"' -f $script:logsPath)
     })
 }
-$null = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(352, 296, 100, 34) -Properties @{ Text = 'Clear View' } -Setup {
+$clearViewButton = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(352, 296, 100, 34) -Properties @{ Text = 'Clear View' } -Setup {
     param($control)
     $control.Add_Click({
     $run = Get-CurrentToolRun
@@ -810,7 +910,7 @@ $null = Add-UiControl -Parent $contentPanel -Type Button -Bounds @(352, 296, 100
     })
 }
 
-$null = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 348, 120, 24) -Properties @{ Text = 'Console Output'; Font = $script:fonts.Section }
+$consoleOutputLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 348, 120, 24) -Properties @{ Text = 'Console Output'; Font = $script:fonts.Section }
 $logBox = Add-UiControl -Parent $contentPanel -Type TextBox -Bounds @(18, 376, 754, 112) -Properties @{ Anchor = 'Top, Bottom, Left, Right'; Multiline = $true; ScrollBars = 'Both'; WordWrap = $false; ReadOnly = $true; Font = $script:fonts.Log }
 $consoleInputLabel = Add-UiControl -Parent $contentPanel -Type Label -Bounds @(18, 511, 48, 22) -Properties @{ Text = 'Input'; Anchor = 'Bottom, Left'; Visible = $false }
 $consoleInputBox = Add-UiControl -Parent $contentPanel -Type TextBox -Bounds @(76, 506, 578, 26) -Properties @{ Anchor = 'Bottom, Left, Right'; Enabled = $false; Visible = $false } -Setup {

@@ -60,26 +60,34 @@ if (-not [string]::IsNullOrWhiteSpace($InputPath)) {
 
 $script:LogWriter = New-SharedLogWriter -Path $LogPath
 
-function Write-RemoteAccessStatus {
+function New-RemoteAccessStatusWriter {
     param(
         [Parameter(Mandatory)][string]$Prefix,
-        [Parameter(Mandatory)][string]$Message
+        [Parameter(Mandatory)][System.IO.StreamWriter]$Writer
     )
 
-    $line = '{0} [{1}] {2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Prefix, $Message
-    $script:LogWriter.WriteLine($line)
-    Write-Host $line
+    return {
+        param([Parameter(Mandatory)][string]$Message)
+
+        $line = '{0} [{1}] {2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Prefix, $Message
+        $Writer.WriteLine($line)
+        Write-Host $line
+    }.GetNewClosure()
 }
 
-function Write-RemoteAccessReceived {
-    param([AllowEmptyString()][string]$Text)
+function New-RemoteAccessReceivedWriter {
+    param([Parameter(Mandatory)][System.IO.StreamWriter]$Writer)
 
-    if ([string]::IsNullOrEmpty($Text)) {
-        return
-    }
+    return {
+        param([AllowEmptyString()][string]$Text)
 
-    $script:LogWriter.Write($Text)
-    Write-Host -NoNewline $Text
+        if ([string]::IsNullOrEmpty($Text)) {
+            return
+        }
+
+        $Writer.Write($Text)
+        Write-Host -NoNewline $Text
+    }.GetNewClosure()
 }
 
 function New-RemoteAccessInputReader {
@@ -142,30 +150,11 @@ function New-RemoteAccessInputReader {
     }.GetNewClosure()
 }
 
-$writeRemoteAccessStatus = {
-    param([string]$Message)
-    Write-RemoteAccessStatus -Prefix 'RemoteAccess' -Message $Message
-}.GetNewClosure()
-
-$writeTelnetStatus = {
-    param([string]$Message)
-    Write-RemoteAccessStatus -Prefix 'Telnet' -Message $Message
-}.GetNewClosure()
-
-$writeSerialStatus = {
-    param([string]$Message)
-    Write-RemoteAccessStatus -Prefix 'Serial' -Message $Message
-}.GetNewClosure()
-
-$writeGpsAuthStatus = {
-    param([string]$Message)
-    Write-RemoteAccessStatus -Prefix 'GPS Auth' -Message $Message
-}.GetNewClosure()
-
-$writeReceived = {
-    param([AllowEmptyString()][string]$Text)
-    Write-RemoteAccessReceived -Text $Text
-}.GetNewClosure()
+$writeRemoteAccessStatus = New-RemoteAccessStatusWriter -Prefix 'RemoteAccess' -Writer $script:LogWriter
+$writeTelnetStatus = New-RemoteAccessStatusWriter -Prefix 'Telnet' -Writer $script:LogWriter
+$writeSerialStatus = New-RemoteAccessStatusWriter -Prefix 'Serial' -Writer $script:LogWriter
+$writeGpsAuthStatus = New-RemoteAccessStatusWriter -Prefix 'GPS Auth' -Writer $script:LogWriter
+$writeReceived = New-RemoteAccessReceivedWriter -Writer $script:LogWriter
 
 $exitCode = 0
 

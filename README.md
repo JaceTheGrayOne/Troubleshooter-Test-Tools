@@ -4,7 +4,9 @@ No-install Windows 11 launcher for the troubleshooting scripts in this repo. It 
 
 ## Run it
 
-Double-click `Run_Tool_Launcher.cmd`, or run this from PowerShell:
+Double-click `Run_Tool_Launcher.vbs` to launch only the GUI. `Run_Tool_Launcher.cmd` is kept as a compatibility wrapper.
+
+You can also run this from PowerShell:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\ToolLauncher.ps1
@@ -19,4 +21,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\ToolLauncher.ps1
 - The `Protocol` dropdown switches between Telnet settings and Serial settings.
 - The `RMUP Log` preset fills Telnet settings for `192.168.200.100:23`.
 - The `GPS Auth` preset fills Serial settings and runs the Spectracom SecureSync authentication flow.
+- `Network Monitor` launches the batch file configured in its `launchPath` catalog entry.
+- `Test Report Parser` launches the batch file configured in its `launchPath` catalog entry.
 - Each run writes a timestamped log under `Logs`.

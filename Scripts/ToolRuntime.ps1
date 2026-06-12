@@ -37,8 +37,11 @@ function Get-ToolDefinitions {
             throw "Tool '$($tool.id)' is missing a name."
         }
 
-        if ([string]::IsNullOrWhiteSpace($tool.script)) {
-            throw "Tool '$($tool.id)' is missing a script path."
+        $hasScript = ($tool.PSObject.Properties.Name -contains 'script') -and -not [string]::IsNullOrWhiteSpace($tool.script)
+        $hasLaunchPath = ($tool.PSObject.Properties.Name -contains 'launchPath') -and -not [string]::IsNullOrWhiteSpace($tool.launchPath)
+
+        if (-not $hasScript -and -not $hasLaunchPath) {
+            throw "Tool '$($tool.id)' is missing a script path or launch path."
         }
 
         if ($tool.PSObject.Properties.Name -contains 'presetsPath' -and [string]::IsNullOrWhiteSpace($tool.presetsPath)) {

@@ -1,4 +1,4 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File "%~dp0ToolLauncher.ps1"
+wscript.exe "%~dp0Run_Tool_Launcher.vbs"

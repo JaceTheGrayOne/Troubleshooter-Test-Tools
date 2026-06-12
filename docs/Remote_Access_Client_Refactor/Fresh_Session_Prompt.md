@@ -1,8 +1,3 @@
-# Fresh Session Prompt
-
-Use this prompt in a fresh Codex session from the repo root.
-
-```text
 You are working in D:\Development\Troubleshooters_Test_Tools.
 
 Implement the Remote Access client refactor described in:
@@ -43,4 +38,3 @@ Verification required before final response:
 - Run git status --short and report the changed files.
 
 Finish by committing the completed refactor with a concise commit message.
-```

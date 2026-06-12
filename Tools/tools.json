@@ -187,6 +187,20 @@
           }
         }
       ]
+    },
+    {
+      "id": "network-monitor",
+      "name": "Network Monitor",
+      "launchPath": "ENTER_NETWORK_MONITOR_PATH_HERE",
+      "launchButtonText": "Launch",
+      "fields": []
+    },
+    {
+      "id": "test-report-parser",
+      "name": "Test Report Parser",
+      "launchPath": "ENTER_PARSER_PATH_HERE",
+      "launchButtonText": "Launch",
+      "fields": []
     }
   ]
 }
