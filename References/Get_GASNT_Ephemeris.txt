@@ -1,0 +1,7 @@
+open 192.168.51.21
+ftp
+ftp
+get ephemeris.bin
+/gfact_shared/ephemeris/ephemeris.bin
+close
+quit
