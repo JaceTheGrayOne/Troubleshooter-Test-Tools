@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm view *)",
+      "PowerShell(npm config *)",
+      "PowerShell(Test-NetConnection *)",
+      "PowerShell(npm install *)",
+      "PowerShell(npm list *)"
+    ]
+  }
+}

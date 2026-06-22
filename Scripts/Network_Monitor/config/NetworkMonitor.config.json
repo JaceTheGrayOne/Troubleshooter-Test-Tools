@@ -1,0 +1,91 @@
+{
+  "Targets": [
+    {
+      "Name": "SMS",
+      "Address": "192.168.51.20",
+      "Color": "#ff40e6",
+      "Enabled": true
+    },
+    {
+      "Name": "MPS",
+      "Address": "192.168.101.20",
+      "Color": "#ff40e6",
+      "Enabled": true
+    },
+    {
+      "Name": "MPG",
+      "Address": "192.168.200.100",
+      "Color": "#27d9e6",
+      "Enabled": true
+    }
+  ],
+  "RefreshMilliseconds": 1000,
+  "PingTimeoutMilliseconds": 1000,
+  "HistoryLength": 12,
+  "AlwaysOnTop": false,
+  "AutoStart": true,
+  "DebugMode": false,
+  "Window": {
+    "Width": 1120,
+    "Height": 330,
+    "X": 553,
+    "Y": 260,
+    "Maximized": false
+  },
+  "Columns": [
+    {
+      "Id": "Node",
+      "Visible": true,
+      "Width": 120
+    },
+    {
+      "Id": "Address",
+      "Visible": true,
+      "Width": 250
+    },
+    {
+      "Id": "Status",
+      "Visible": true,
+      "Width": 150
+    },
+    {
+      "Id": "RTT",
+      "Visible": true,
+      "Width": 130
+    },
+    {
+      "Id": "Loss",
+      "Visible": true,
+      "Width": 130
+    },
+    {
+      "Id": "History",
+      "Visible": true,
+      "Width": 260
+    },
+    {
+      "Id": "TTL",
+      "Visible": false,
+      "Width": 90
+    },
+    {
+      "Id": "Bytes",
+      "Visible": false,
+      "Width": 95
+    }
+  ],
+  "Health": {
+    "DownFailures": 3,
+    "OrangeFailures": 2,
+    "OrangeLossPercent": 25
+  },
+  "RttThresholds": {
+    "GreenMax": 50,
+    "YellowMax": 100,
+    "OrangeMax": 250
+  },
+  "LossThresholds": {
+    "YellowMax": 10,
+    "OrangeMax": 25
+  }
+}

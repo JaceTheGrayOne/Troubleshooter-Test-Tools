@@ -1,0 +1,1 @@
+Software update processing complete, Waiting for SMS message to commit new software
