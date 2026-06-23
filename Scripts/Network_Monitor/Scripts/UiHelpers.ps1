@@ -87,10 +87,10 @@ function Initialize-NMTheme {
     }
 
     $script:NMFonts = @{
-        Title = [System.Drawing.Font]::new('Segoe UI', 18, [System.Drawing.FontStyle]::Regular)
-        GridHeader = [System.Drawing.Font]::new('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
-        Grid = [System.Drawing.Font]::new('Consolas', 15, [System.Drawing.FontStyle]::Regular)
-        GridBold = [System.Drawing.Font]::new('Consolas', 15, [System.Drawing.FontStyle]::Bold)
+        Title = [System.Drawing.Font]::new('Segoe UI', 12, [System.Drawing.FontStyle]::Regular)
+        GridHeader = [System.Drawing.Font]::new('Segoe UI', 11, [System.Drawing.FontStyle]::Bold)
+        Grid = [System.Drawing.Font]::new('Consolas', 11, [System.Drawing.FontStyle]::Regular)
+        GridBold = [System.Drawing.Font]::new('Consolas', 11, [System.Drawing.FontStyle]::Bold)
         SettingsTitle = [System.Drawing.Font]::new('Segoe UI', 11, [System.Drawing.FontStyle]::Bold)
         Settings = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Regular)
         SettingsBold = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
@@ -129,6 +129,193 @@ function ConvertTo-NMDrawingColor {
     return [System.Drawing.ColorTranslator]::FromHtml($HtmlColor)
 }
 
+function Add-NMSafeEvent {
+    param(
+        [Parameter(Mandatory)]$Control,
+        [Parameter(Mandatory)][string]$EventName,
+        [Parameter(Mandatory)][scriptblock]$Handler
+    )
+
+    $adder = 'Add_{0}' -f $EventName
+    $Control.$adder($Handler.GetNewClosure())
+}
+
+function New-NMAppWindow {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][System.Drawing.Size]$Size,
+        [Parameter(Mandatory)][System.Drawing.Size]$MinimumSize,
+        [bool]$ShowInTaskbar,
+        [bool]$TopMost,
+        [bool]$Resizable
+    )
+
+    $form = if ($Resizable) {
+        [NetworkMonitorForm]::new()
+    }
+    else {
+        [System.Windows.Forms.Form]::new()
+    }
+
+    $form.Name = $Name
+    $form.Text = $Title
+    $form.Size = $Size
+    $form.MinimumSize = $MinimumSize
+    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+    $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    $form.ShowInTaskbar = $ShowInTaskbar
+    $form.TopMost = $TopMost
+    $form.BackColor = $script:NMColors.Window
+    $form.ForeColor = $script:NMColors.Text
+    $form.Font = $script:NMFonts.Settings
+    $form.KeyPreview = $true
+    $form.MaximizeBox = $Resizable
+    $form.MinimizeBox = $true
+
+    $form.Add_Paint({
+        param($sender, $eventArgs)
+
+        $pen = [System.Drawing.Pen]::new($script:NMColors.Border, 1)
+        try {
+            $eventArgs.Graphics.DrawRectangle($pen, 0, 0, $sender.ClientSize.Width - 1, $sender.ClientSize.Height - 1)
+        }
+        finally {
+            $pen.Dispose()
+        }
+    })
+
+    return $form
+}
+
+function Set-NMTitleButtonMargin {
+    param([Parameter(Mandatory)][System.Windows.Forms.Control]$Control)
+
+    $Control.Margin = [System.Windows.Forms.Padding]::new(3, 4, 3, 4)
+}
+
+function Invoke-NMFormMaximizeToggle {
+    param([Parameter(Mandatory)][System.Windows.Forms.Form]$Form)
+
+    if ($Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+        $Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+    }
+    else {
+        $Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+    }
+}
+
+function Enable-NMWindowDrag {
+    param(
+        [Parameter(Mandatory)][System.Windows.Forms.Control]$Control,
+        [Parameter(Mandatory)][System.Windows.Forms.Form]$Form,
+        [switch]$EnableDoubleClickMaximize
+    )
+
+    $targetForm = $Form
+
+    if ($EnableDoubleClickMaximize) {
+        $Control.Add_MouseDoubleClick({
+            param($sender, $eventArgs)
+            [void]$sender
+
+            if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+                Invoke-NMFormMaximizeToggle -Form $targetForm
+            }
+        }.GetNewClosure())
+    }
+
+    $Control.Add_MouseDown({
+        param($sender, $eventArgs)
+        [void]$sender
+
+        if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+            [NetworkMonitorNative]::ReleaseCapture() | Out-Null
+            [NetworkMonitorNative]::SendMessage($targetForm.Handle, 0xA1, 0x2, 0) | Out-Null
+        }
+    }.GetNewClosure())
+}
+
+function New-NMTitleBar {
+    param(
+        [Parameter(Mandatory)][System.Windows.Forms.Form]$Form,
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][object[]]$Buttons,
+        [switch]$CanMaximize,
+        [int]$Height = 46
+    )
+
+    $titleBar = [System.Windows.Forms.Panel]::new()
+    $titleBar.Name = 'NMTitleBar'
+    $titleBar.Dock = [System.Windows.Forms.DockStyle]::Top
+    $titleBar.Height = $Height
+    $titleBar.BackColor = $script:NMColors.TitleBar
+    Enable-NMWindowDrag -Control $titleBar -Form $Form -EnableDoubleClickMaximize:$CanMaximize
+
+    $buttonPanel = [System.Windows.Forms.FlowLayoutPanel]::new()
+    $buttonPanel.Name = 'NMTitleButtonPanel'
+    $buttonPanel.Dock = [System.Windows.Forms.DockStyle]::Right
+    $buttonPanel.FlowDirection = [System.Windows.Forms.FlowDirection]::LeftToRight
+    $buttonPanel.WrapContents = $false
+    $buttonPanel.Padding = [System.Windows.Forms.Padding]::new(4, 0, 8, 0)
+    $buttonPanel.BackColor = $script:NMColors.TitleBar
+
+    $buttonMap = @{}
+    $panelWidth = 12
+    foreach ($definition in @($Buttons)) {
+        if ([string]$definition.Kind -eq 'Separator') {
+            $panelWidth += 17
+        }
+        else {
+            $panelWidth += 44
+        }
+    }
+    $buttonPanel.Width = [math]::Max(50, $panelWidth)
+
+    $titleLabel = [System.Windows.Forms.Label]::new()
+    $titleLabel.Name = 'NMTitleLabel'
+    $titleLabel.Text = $Title
+    $titleLabel.AutoSize = $false
+    $titleLabel.AutoEllipsis = $true
+    $titleLabel.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $titleLabel.Padding = [System.Windows.Forms.Padding]::new(18, 0, 8, 0)
+    $titleLabel.BackColor = $script:NMColors.TitleBar
+    $titleLabel.ForeColor = $script:NMColors.Text
+    $titleLabel.Font = $script:NMFonts.Title
+    $titleLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+    Enable-NMWindowDrag -Control $titleLabel -Form $Form -EnableDoubleClickMaximize:$CanMaximize
+
+    $titleBar.Controls.Add($titleLabel)
+    $titleBar.Controls.Add($buttonPanel)
+
+    foreach ($definition in @($Buttons)) {
+        if ([string]$definition.Kind -eq 'Separator') {
+            $separator = [System.Windows.Forms.Panel]::new()
+            $separator.Size = Get-NMSize 1 30
+            $separator.Margin = [System.Windows.Forms.Padding]::new(8, 8, 8, 8)
+            $separator.BackColor = $script:NMColors.GridLine
+            $buttonPanel.Controls.Add($separator)
+            continue
+        }
+
+        $key = if (-not [string]::IsNullOrWhiteSpace([string]$definition.Key)) { [string]$definition.Key } else { [string]$definition.Kind }
+        $toolTip = if (-not [string]::IsNullOrWhiteSpace([string]$definition.ToolTip)) { [string]$definition.ToolTip } else { $key }
+        $button = New-NMIconButton -Parent $buttonPanel -Kind ([string]$definition.Kind) -ToolTipText $toolTip -Bounds @(0, 0, 38, 38) -OnClick $definition.OnClick
+        $button.Name = 'NMTitleButton{0}' -f $key
+        Set-NMTitleButtonMargin -Control $button
+        if ($definition.Active) {
+            Set-NMIconButtonActive -Button $button -Active ([bool]$definition.Active)
+        }
+        $buttonMap[$key] = $button
+    }
+
+    return [pscustomobject]@{
+        Panel = $titleBar
+        Buttons = $buttonMap
+        TitleLabel = $titleLabel
+    }
+}
+
 function Use-NMButtonTheme {
     param(
         [Parameter(Mandatory)][System.Windows.Forms.Button]$Button,
@@ -146,7 +333,7 @@ function Use-NMButtonTheme {
 function New-NMButton {
     param(
         [Parameter(Mandatory)][System.Windows.Forms.Control]$Parent,
-        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
         [Parameter(Mandatory)][int[]]$Bounds,
         [scriptblock]$OnClick = $null,
         [switch]$Primary
@@ -158,7 +345,13 @@ function New-NMButton {
     $button.Size = Get-NMSize $Bounds[2] $Bounds[3]
     Use-NMButtonTheme -Button $button -Primary:$Primary
     if ($OnClick) {
-        $button.Add_Click($OnClick)
+        $button.Tag = [pscustomobject]@{ OnClick = $OnClick }
+        $button.Add_Click({
+            param($sender, $eventArgs)
+            if ($sender.Tag -and $sender.Tag.OnClick) {
+                & $sender.Tag.OnClick $sender $eventArgs
+            }
+        })
     }
     $Parent.Controls.Add($button)
     return $button
@@ -167,7 +360,7 @@ function New-NMButton {
 function New-NMLabel {
     param(
         [Parameter(Mandatory)][System.Windows.Forms.Control]$Parent,
-        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
         [Parameter(Mandatory)][int[]]$Bounds,
         [System.Drawing.Font]$Font = $script:NMFonts.Settings,
         [System.Drawing.Color]$ForeColor = $script:NMColors.Text
@@ -202,7 +395,7 @@ function Draw-NMIcon {
     )
 
     $Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $pen = [System.Drawing.Pen]::new($Color, 2.4)
+    $pen = [System.Drawing.Pen]::new($Color, 2.0)
     $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
     $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
     $brush = [System.Drawing.SolidBrush]::new($Color)
@@ -215,40 +408,44 @@ function Draw-NMIcon {
             'Settings' {
                 for ($i = 0; $i -lt 8; $i++) {
                     $angle = ($i * [math]::PI) / 4
-                    $x1 = $cx + [int]([math]::Cos($angle) * 11)
-                    $y1 = $cy + [int]([math]::Sin($angle) * 11)
-                    $x2 = $cx + [int]([math]::Cos($angle) * 15)
-                    $y2 = $cy + [int]([math]::Sin($angle) * 15)
+                    $x1 = $cx + [int]([math]::Cos($angle) * 8)
+                    $y1 = $cy + [int]([math]::Sin($angle) * 8)
+                    $x2 = $cx + [int]([math]::Cos($angle) * 12)
+                    $y2 = $cy + [int]([math]::Sin($angle) * 12)
                     $Graphics.DrawLine($pen, $x1, $y1, $x2, $y2)
                 }
-                $Graphics.DrawEllipse($pen, (Get-NMRectangle ($cx - 10) ($cy - 10) 20 20))
-                $Graphics.DrawEllipse($pen, (Get-NMRectangle ($cx - 4) ($cy - 4) 8 8))
+                $Graphics.DrawEllipse($pen, (Get-NMRectangle ($cx - 8) ($cy - 8) 16 16))
+                $Graphics.DrawEllipse($pen, (Get-NMRectangle ($cx - 3) ($cy - 3) 6 6))
             }
             'Refresh' {
-                $Graphics.DrawArc($pen, (Get-NMRectangle ($cx - 13) ($cy - 13) 26 26), 35, 275)
-                $Graphics.DrawLine($pen, $cx + 11, $cy - 13, $cx + 15, $cy - 4)
-                $Graphics.DrawLine($pen, $cx + 11, $cy - 13, $cx + 2, $cy - 12)
+                $Graphics.DrawArc($pen, (Get-NMRectangle ($cx - 11) ($cy - 11) 22 22), 35, 275)
+                $Graphics.DrawLine($pen, $cx + 9, $cy - 11, $cx + 13, $cy - 4)
+                $Graphics.DrawLine($pen, $cx + 9, $cy - 11, $cx + 2, $cy - 10)
             }
             'Pin' {
-                $Graphics.DrawLine($pen, $cx - 2, $cy - 15, $cx + 12, $cy - 1)
-                $Graphics.DrawLine($pen, $cx - 12, $cy - 2, $cx + 2, $cy - 16)
-                $Graphics.DrawLine($pen, $cx - 7, $cy + 3, $cx + 7, $cy - 11)
-                $Graphics.DrawLine($pen, $cx - 1, $cy + 2, $cx + 12, $cy + 15)
-                $Graphics.DrawLine($pen, $cx - 7, $cy + 7, $cx - 15, $cy + 15)
+                $points = [System.Drawing.Point[]]@(
+                    (Get-NMPoint ($cx - 4) ($cy - 13)),
+                    (Get-NMPoint ($cx + 10) ($cy + 1)),
+                    (Get-NMPoint ($cx + 5) ($cy + 6)),
+                    (Get-NMPoint ($cx - 9) ($cy - 8))
+                )
+                $Graphics.DrawPolygon($pen, $points)
+                $Graphics.DrawLine($pen, $cx + 3, $cy + 4, $cx - 10, $cy + 15)
+                $Graphics.DrawLine($pen, $cx - 3, $cy + 2, $cx - 12, $cy + 11)
             }
             'Minimize' {
-                $Graphics.DrawLine($pen, $cx - 13, $cy + 5, $cx + 13, $cy + 5)
+                $Graphics.DrawLine($pen, $cx - 11, $cy + 5, $cx + 11, $cy + 5)
             }
             'Maximize' {
-                $Graphics.DrawRectangle($pen, (Get-NMRectangle ($cx - 10) ($cy - 10) 20 20))
+                $Graphics.DrawRectangle($pen, (Get-NMRectangle ($cx - 9) ($cy - 9) 18 18))
             }
             'Restore' {
-                $Graphics.DrawRectangle($pen, (Get-NMRectangle ($cx - 7) ($cy - 11) 17 17))
-                $Graphics.DrawRectangle($pen, (Get-NMRectangle ($cx - 11) ($cy - 6) 17 17))
+                $Graphics.DrawRectangle($pen, (Get-NMRectangle ($cx - 6) ($cy - 10) 15 15))
+                $Graphics.DrawRectangle($pen, (Get-NMRectangle ($cx - 10) ($cy - 5) 15 15))
             }
             'Close' {
-                $Graphics.DrawLine($pen, $cx - 11, $cy - 11, $cx + 11, $cy + 11)
-                $Graphics.DrawLine($pen, $cx + 11, $cy - 11, $cx - 11, $cy + 11)
+                $Graphics.DrawLine($pen, $cx - 10, $cy - 10, $cx + 10, $cy + 10)
+                $Graphics.DrawLine($pen, $cx + 10, $cy - 10, $cx - 10, $cy + 10)
             }
             'Monitor' {
                 $Graphics.DrawRectangle($pen, (Get-NMRectangle ($cx - 16) ($cy - 12) 22 14))
@@ -286,6 +483,7 @@ function New-NMIconButton {
         Hover = $false
         Pressed = $false
         Active = $false
+        OnClick = $OnClick
     }
 
     $button.Add_MouseEnter({
@@ -310,13 +508,13 @@ function New-NMIconButton {
     })
     $button.Add_MouseUp({
         param($sender, $eventArgs)
-        [void]$eventArgs
+        $wasPressed = [bool]$sender.Tag.Pressed
         $sender.Tag.Pressed = $false
         $sender.Invalidate()
+        if ($wasPressed -and $eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left -and $sender.Tag.OnClick) {
+            & $sender.Tag.OnClick $sender $eventArgs
+        }
     })
-    if ($OnClick) {
-        $button.Add_Click($OnClick)
-    }
 
     $button.Add_Paint({
         param($sender, $paintEventArgs)
@@ -331,7 +529,13 @@ function New-NMIconButton {
             $script:NMColors.TitleBar
         }
 
-        $paintEventArgs.Graphics.Clear($background)
+        $brush = [System.Drawing.SolidBrush]::new($background)
+        try {
+            $paintEventArgs.Graphics.FillRectangle($brush, $sender.ClientRectangle)
+        }
+        finally {
+            $brush.Dispose()
+        }
         $color = if ($state.Active) { $script:NMColors.Accent } else { $script:NMColors.Text }
         Draw-NMIcon -Kind ([string]$state.Kind) -Graphics $paintEventArgs.Graphics -Bounds $sender.ClientRectangle -Color $color
     })
@@ -368,20 +572,5 @@ function Enable-NMTitleDrag {
         [Parameter(Mandatory)][System.Windows.Forms.Form]$Form
     )
 
-    $Control.Add_MouseDoubleClick({
-        param($sender, $eventArgs)
-        [void]$sender
-        if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
-            Invoke-NMToggleMaximize
-        }
-    })
-
-    $Control.Add_MouseDown({
-        param($sender, $eventArgs)
-        [void]$sender
-        if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
-            [NetworkMonitorNative]::ReleaseCapture() | Out-Null
-            [NetworkMonitorNative]::SendMessage($Form.Handle, 0xA1, 0x2, 0) | Out-Null
-        }
-    })
+    Enable-NMWindowDrag -Control $Control -Form $Form -EnableDoubleClickMaximize
 }

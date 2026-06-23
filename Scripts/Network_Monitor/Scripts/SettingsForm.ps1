@@ -8,8 +8,115 @@ function Set-NMSettingsFeedback {
         return
     }
 
+    $script:NMSettingsFeedbackLabel.Visible = $true
     $script:NMSettingsFeedbackLabel.Text = $Message
     $script:NMSettingsFeedbackLabel.ForeColor = if ($Error) { $script:NMColors.Red } else { $script:NMColors.Muted }
+}
+
+function Set-NMNumericCommittedValue {
+    param(
+        [Parameter(Mandatory)][System.Windows.Forms.NumericUpDown]$Box,
+        [Parameter(Mandatory)][decimal]$Value
+    )
+
+    $script:NMSettingsSuppress = $true
+    try {
+        $Box.Value = $Value
+        if ($Box.Tag -and $Box.Tag.PSObject.Properties['LastCommitted']) {
+            $Box.Tag.LastCommitted = [decimal]$Value
+        }
+    }
+    finally {
+        $script:NMSettingsSuppress = $false
+    }
+}
+
+function Invoke-NMNumericCommit {
+    param([Parameter(Mandatory)][System.Windows.Forms.NumericUpDown]$Box)
+
+    if ($script:NMSettingsSuppress -or $Box.Tag.Committing) {
+        return
+    }
+
+    if ([decimal]$Box.Value -eq [decimal]$Box.Tag.LastCommitted) {
+        return
+    }
+
+    $Box.Tag.Committing = $true
+    try {
+        $ok = & $Box.Tag.OnCommit $Box
+        if ($ok -ne $false) {
+            $Box.Tag.LastCommitted = [decimal]$Box.Value
+        }
+        else {
+            $Box.Value = [decimal]$Box.Tag.LastCommitted
+        }
+    }
+    finally {
+        $Box.Tag.Committing = $false
+    }
+}
+
+function Register-NMNumericCommit {
+    param(
+        [Parameter(Mandatory)][System.Windows.Forms.NumericUpDown]$Box,
+        [Parameter(Mandatory)][scriptblock]$OnCommit
+    )
+
+    $Box.Tag = [pscustomobject]@{
+        LastCommitted = [decimal]$Box.Value
+        Committing = $false
+        OnCommit = $OnCommit
+    }
+
+    $Box.Add_KeyDown({
+        param($sender, $eventArgs)
+        if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
+            Invoke-NMNumericCommit -Box $sender
+            $eventArgs.SuppressKeyPress = $true
+        }
+    })
+    $Box.Add_Validated({
+        param($sender, $eventArgs)
+        [void]$eventArgs
+        Invoke-NMNumericCommit -Box $sender
+    })
+}
+
+function Use-NMTabTheme {
+    param([Parameter(Mandatory)][System.Windows.Forms.TabControl]$TabControl)
+
+    $TabControl.DrawMode = [System.Windows.Forms.TabDrawMode]::OwnerDrawFixed
+    $TabControl.SizeMode = [System.Windows.Forms.TabSizeMode]::Fixed
+    $TabControl.ItemSize = Get-NMSize 153 28
+    $TabControl.Padding = Get-NMPoint 8 4
+    $TabControl.Add_DrawItem({
+        param($sender, $eventArgs)
+
+        $active = ($eventArgs.Index -eq $sender.SelectedIndex)
+        $bounds = $eventArgs.Bounds
+        $backColor = if ($active) { $script:NMColors.Surface } else { $script:NMColors.TitleBar }
+        $foreColor = if ($active) { $script:NMColors.Text } else { $script:NMColors.Muted }
+
+        $brush = [System.Drawing.SolidBrush]::new($backColor)
+        $pen = [System.Drawing.Pen]::new($script:NMColors.GridLine, 1)
+        try {
+            $eventArgs.Graphics.FillRectangle($brush, $bounds)
+            $eventArgs.Graphics.DrawRectangle($pen, $bounds.X, $bounds.Y, $bounds.Width - 1, $bounds.Height - 1)
+            [System.Windows.Forms.TextRenderer]::DrawText(
+                $eventArgs.Graphics,
+                $sender.TabPages[$eventArgs.Index].Text,
+                $script:NMFonts.Settings,
+                $bounds,
+                $foreColor,
+                ([System.Windows.Forms.TextFormatFlags]::HorizontalCenter -bor [System.Windows.Forms.TextFormatFlags]::VerticalCenter -bor [System.Windows.Forms.TextFormatFlags]::NoPrefix)
+            )
+        }
+        finally {
+            $brush.Dispose()
+            $pen.Dispose()
+        }
+    })
 }
 
 function Sync-NMTargetsGrid {
@@ -62,6 +169,7 @@ function Commit-NMTargetCell {
     }
 
     $target = $script:NMConfig.Targets[$RowIndex]
+    $newValue = $null
 
     switch ($ColumnName) {
         'Enabled' {
@@ -80,7 +188,7 @@ function Commit-NMTargetCell {
                 }
             }
 
-            $target.Enabled = $enabled
+            $newValue = $enabled
         }
         'Name' {
             $name = ([string]$Value).Trim()
@@ -96,11 +204,7 @@ function Commit-NMTargetCell {
                 }
             }
 
-            $oldName = [string]$target.Name
-            $target.Name = $name
-            if ($script:NMTargetStates.ContainsKey($oldName)) {
-                $script:NMTargetStates.Remove($oldName)
-            }
+            $newValue = $name
         }
         'Address' {
             $address = ([string]$Value).Trim()
@@ -109,7 +213,7 @@ function Commit-NMTargetCell {
                 return $false
             }
 
-            $target.Address = $address
+            $newValue = $address
         }
         'Color' {
             $color = ([string]$Value).Trim()
@@ -118,11 +222,14 @@ function Commit-NMTargetCell {
                 return $false
             }
 
-            $target.Color = $color.ToLowerInvariant()
+            $newValue = $color.ToLowerInvariant()
         }
     }
 
-    if (Invoke-NMConfigChanged -ResetMonitor -RebuildGrid -Reason 'Target settings changed') {
+    if (Invoke-NMConfigEditAndApply -ResetMonitor -RebuildGrid -Reason 'Target settings changed' -Edit {
+        param($config)
+        $config.Targets[$RowIndex][$ColumnName] = $newValue
+    }) {
         Set-NMSettingsFeedback -Message 'Target settings saved.'
         return $true
     }
@@ -149,14 +256,17 @@ function New-NMUniqueTargetName {
 }
 
 function Add-NMTargetFromSettings {
-    $script:NMConfig.Targets = @($script:NMConfig.Targets + [ordered]@{
+    $newTarget = [ordered]@{
         Name = New-NMUniqueTargetName
         Address = 'localhost'
         Color = '#27d9e6'
         Enabled = $true
-    })
+    }
 
-    if (Invoke-NMConfigChanged -ResetMonitor -RebuildGrid -Reason 'Target added') {
+    if (Invoke-NMConfigEditAndApply -ResetMonitor -RebuildGrid -Reason 'Target added' -Edit {
+        param($config)
+        $config.Targets = @($config.Targets + $newTarget)
+    }) {
         Sync-NMTargetsGrid
         if ($script:NMSettingsTargetsGrid.Rows.Count -gt 0) {
             $script:NMSettingsTargetsGrid.CurrentCell = $script:NMSettingsTargetsGrid.Rows[$script:NMSettingsTargetsGrid.Rows.Count - 1].Cells['Name']
@@ -185,12 +295,13 @@ function Remove-NMSelectedTarget {
         }
     }
 
-    $list = [System.Collections.ArrayList]::new()
-    foreach ($item in @($script:NMConfig.Targets)) { [void]$list.Add($item) }
-    $list.RemoveAt($index)
-    $script:NMConfig.Targets = @($list)
-
-    if (Invoke-NMConfigChanged -ResetMonitor -RebuildGrid -Reason 'Target deleted') {
+    if (Invoke-NMConfigEditAndApply -ResetMonitor -RebuildGrid -Reason 'Target deleted' -Edit {
+        param($config)
+        $list = [System.Collections.ArrayList]::new()
+        foreach ($item in @($config.Targets)) { [void]$list.Add($item) }
+        $list.RemoveAt($index)
+        $config.Targets = @($list)
+    }) {
         Sync-NMTargetsGrid
         Set-NMSettingsFeedback -Message 'Target deleted.'
     }
@@ -210,13 +321,14 @@ function Move-NMSelectedTarget {
         return
     }
 
-    $targets = @($script:NMConfig.Targets)
-    $temp = $targets[$index]
-    $targets[$index] = $targets[$newIndex]
-    $targets[$newIndex] = $temp
-    $script:NMConfig.Targets = @($targets)
-
-    if (Invoke-NMConfigChanged -ResetMonitor -RebuildGrid -Reason 'Target order changed') {
+    if (Invoke-NMConfigEditAndApply -ResetMonitor -RebuildGrid -Reason 'Target order changed' -Edit {
+        param($config)
+        $targets = @($config.Targets)
+        $temp = $targets[$index]
+        $targets[$index] = $targets[$newIndex]
+        $targets[$newIndex] = $temp
+        $config.Targets = @($targets)
+    }) {
         Sync-NMTargetsGrid
         $script:NMSettingsTargetsGrid.CurrentCell = $script:NMSettingsTargetsGrid.Rows[$newIndex].Cells['Name']
         Set-NMSettingsFeedback -Message 'Target order saved.'
@@ -229,7 +341,7 @@ function New-NMTargetsTab {
     $grid = [System.Windows.Forms.DataGridView]::new()
     $grid.Location = Get-NMPoint 14 14
     $grid.Size = Get-NMSize 570 272
-    $grid.Anchor = 'Top, Left, Right, Bottom'
+    $grid.Anchor = 'Top, Left, Bottom'
     $grid.BackgroundColor = $script:NMColors.Surface
     $grid.GridColor = $script:NMColors.GridLine
     $grid.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
@@ -357,6 +469,9 @@ function Update-NMColumnWidthEditor {
         try {
             $script:NMSettingsColumnWidthBox.Minimum = [decimal]$script:NMColumnDefinitions[$id].MinWidth
             $script:NMSettingsColumnWidthBox.Value = [decimal][int]$column.Width
+            if ($script:NMSettingsColumnWidthBox.Tag -and $script:NMSettingsColumnWidthBox.Tag.PSObject.Properties['LastCommitted']) {
+                $script:NMSettingsColumnWidthBox.Tag.LastCommitted = [decimal][int]$column.Width
+            }
         }
         finally {
             $script:NMSettingsSuppress = $false
@@ -378,13 +493,14 @@ function Move-NMSelectedColumn {
         return
     }
 
-    $columns = @($script:NMConfig.Columns)
-    $temp = $columns[$index]
-    $columns[$index] = $columns[$newIndex]
-    $columns[$newIndex] = $temp
-    $script:NMConfig.Columns = @($columns)
-
-    if (Invoke-NMConfigChanged -RebuildGrid -Reason 'Column order changed') {
+    if (Invoke-NMConfigEditAndApply -RebuildGrid -Reason 'Column order changed' -Edit {
+        param($config)
+        $columns = @($config.Columns)
+        $temp = $columns[$index]
+        $columns[$index] = $columns[$newIndex]
+        $columns[$newIndex] = $temp
+        $config.Columns = @($columns)
+    }) {
         Sync-NMColumnsControls
         $script:NMSettingsColumnOrderList.SelectedIndex = $newIndex
         Set-NMSettingsFeedback -Message 'Column order saved.'
@@ -416,10 +532,16 @@ function New-NMColumnsTab {
             return
         }
 
-        $column = Get-NMConfigColumn -Id $id
-        if ($column) {
-            $column.Visible = $newVisible
-            if (Invoke-NMConfigChanged -RebuildGrid -Reason 'Column visibility changed') {
+        if (Get-NMConfigColumn -Id $id) {
+            if (Invoke-NMConfigEditAndApply -RebuildGrid -Reason 'Column visibility changed' -Edit {
+                param($config)
+                foreach ($column in @($config.Columns)) {
+                    if ([string]$column.Id -eq $id) {
+                        $column.Visible = $newVisible
+                        break
+                    }
+                }
+            }) {
                 Set-NMSettingsFeedback -Message 'Column visibility saved.'
             }
         }
@@ -449,17 +571,26 @@ function New-NMColumnsTab {
     $widthBox.ForeColor = $script:NMColors.Text
     $Tab.Controls.Add($widthBox)
     $script:NMSettingsColumnWidthBox = $widthBox
-    $widthBox.Add_ValueChanged({
-        if ($script:NMSettingsSuppress -or -not $script:NMSettingsColumnOrderList -or $script:NMSettingsColumnOrderList.SelectedIndex -lt 0) { return }
+    Register-NMNumericCommit -Box $widthBox -OnCommit {
+        param($box)
+        if ($script:NMSettingsSuppress -or -not $script:NMSettingsColumnOrderList -or $script:NMSettingsColumnOrderList.SelectedIndex -lt 0) { return $false }
         $id = [string]$script:NMSettingsColumnOrderList.SelectedItem
-        $column = Get-NMConfigColumn -Id $id
-        if ($column) {
-            $column.Width = [int]$script:NMSettingsColumnWidthBox.Value
-            if (Invoke-NMConfigChanged -RebuildGrid -Reason 'Column width changed') {
+        if (Get-NMConfigColumn -Id $id) {
+            if (Invoke-NMConfigEditAndApply -RebuildGrid -Reason 'Column width changed' -Edit {
+                param($config)
+                foreach ($column in @($config.Columns)) {
+                    if ([string]$column.Id -eq $id) {
+                        $column.Width = [int]$box.Value
+                        break
+                    }
+                }
+            }) {
                 Set-NMSettingsFeedback -Message 'Column width saved.'
+                return $true
             }
         }
-    })
+        return $false
+    }
 
     Sync-NMColumnsControls
 }
@@ -472,7 +603,7 @@ function New-NMNumericSetting {
         [Parameter(Mandatory)][int]$Minimum,
         [Parameter(Mandatory)][int]$Maximum,
         [Parameter(Mandatory)][int]$Value,
-        [Parameter(Mandatory)][scriptblock]$OnChanged
+        [Parameter(Mandatory)][scriptblock]$OnCommit
     )
 
     $null = New-NMLabel -Parent $Parent -Text $Label -Bounds @($Bounds[0], $Bounds[1] + 3, 250, 22)
@@ -485,7 +616,7 @@ function New-NMNumericSetting {
     $box.BackColor = $script:NMColors.Surface
     $box.ForeColor = $script:NMColors.Text
     $box.Font = $script:NMFonts.Settings
-    $box.Add_ValueChanged($OnChanged)
+    Register-NMNumericCommit -Box $box -OnCommit $OnCommit
     $Parent.Controls.Add($box)
     return $box
 }
@@ -507,7 +638,36 @@ function New-NMCheckboxSetting {
     $box.BackColor = $Parent.BackColor
     $box.ForeColor = $script:NMColors.Text
     $box.Font = $script:NMFonts.Settings
-    if ($OnChanged) { $box.Add_CheckedChanged($OnChanged) }
+    if ($OnChanged) { $box.Add_Click($OnChanged) }
+    $Parent.Controls.Add($box)
+    return $box
+}
+
+function New-NMSettingsNumericRow {
+    param(
+        [Parameter(Mandatory)][System.Windows.Forms.Control]$Parent,
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][int]$X,
+        [Parameter(Mandatory)][int]$Y,
+        [Parameter(Mandatory)][int]$LabelWidth,
+        [Parameter(Mandatory)][int]$Minimum,
+        [Parameter(Mandatory)][int]$Maximum,
+        [Parameter(Mandatory)][int]$Value,
+        [Parameter(Mandatory)][scriptblock]$OnCommit
+    )
+
+    $null = New-NMLabel -Parent $Parent -Text $Label -Bounds @($X, ($Y + 3), $LabelWidth, 22) -ForeColor $script:NMColors.Text
+
+    $box = [System.Windows.Forms.NumericUpDown]::new()
+    $box.Location = Get-NMPoint ($X + $LabelWidth + 12) $Y
+    $box.Size = Get-NMSize 96 24
+    $box.Minimum = $Minimum
+    $box.Maximum = $Maximum
+    $box.Value = $Value
+    $box.BackColor = $script:NMColors.Surface
+    $box.ForeColor = $script:NMColors.Text
+    $box.Font = $script:NMFonts.Settings
+    Register-NMNumericCommit -Box $box -OnCommit $OnCommit
     $Parent.Controls.Add($box)
     return $box
 }
@@ -515,40 +675,60 @@ function New-NMCheckboxSetting {
 function New-NMTimingTab {
     param([Parameter(Mandatory)][System.Windows.Forms.TabPage]$Tab)
 
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Refresh interval (ms)' -Bounds @(22, 24, 110, 24) -Minimum 250 -Maximum 60000 -Value ([int]$script:NMConfig.RefreshMilliseconds) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.RefreshMilliseconds = [int]$this.Value
-        if (Invoke-NMConfigChanged -ResetMonitor -Reason 'Refresh interval changed') {
-            Update-NMPingTimerInterval
+    $null = New-NMNumericSetting -Parent $Tab -Label 'Refresh interval (ms)' -Bounds @(22, 24, 110, 24) -Minimum 250 -Maximum 60000 -Value ([int]$script:NMConfig.RefreshMilliseconds) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'Refresh interval changed' -Edit {
+            param($config)
+            $config.RefreshMilliseconds = [int]$box.Value
+        }) {
             Set-NMSettingsFeedback -Message 'Refresh interval saved.'
+            return $true
         }
+        return $false
     }
 
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Ping timeout (ms)' -Bounds @(22, 64, 110, 24) -Minimum 100 -Maximum 60000 -Value ([int]$script:NMConfig.PingTimeoutMilliseconds) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.PingTimeoutMilliseconds = [int]$this.Value
-        if (Invoke-NMConfigChanged -ResetMonitor -Reason 'Ping timeout changed') {
+    $null = New-NMNumericSetting -Parent $Tab -Label 'Ping timeout (ms)' -Bounds @(22, 64, 110, 24) -Minimum 100 -Maximum 60000 -Value ([int]$script:NMConfig.PingTimeoutMilliseconds) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'Ping timeout changed' -Edit {
+            param($config)
+            $config.PingTimeoutMilliseconds = [int]$box.Value
+        }) {
             Set-NMSettingsFeedback -Message 'Ping timeout saved.'
+            return $true
         }
+        return $false
     }
 
-    $null = New-NMNumericSetting -Parent $Tab -Label 'History length' -Bounds @(22, 104, 110, 24) -Minimum 4 -Maximum 60 -Value ([int]$script:NMConfig.HistoryLength) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.HistoryLength = [int]$this.Value
-        if (Invoke-NMConfigChanged -ResetMonitor -Reason 'History length changed') {
+    $null = New-NMNumericSetting -Parent $Tab -Label 'History length' -Bounds @(22, 104, 110, 24) -Minimum 4 -Maximum 60 -Value ([int]$script:NMConfig.HistoryLength) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'History length changed' -Edit {
+            param($config)
+            $config.HistoryLength = [int]$box.Value
+        }) {
             Set-NMSettingsFeedback -Message 'History length saved.'
+            return $true
         }
+        return $false
     }
 
     $null = New-NMCheckboxSetting -Parent $Tab -Text 'Auto-start monitoring on launch' -Bounds @(22, 152, 260, 28) -Checked ([bool]$script:NMConfig.AutoStart) -OnChanged {
         if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.AutoStart = [bool]$this.Checked
-        if (Invoke-NMConfigChanged -Reason 'Auto-start changed') {
+        $previous = [bool]$script:NMConfig.AutoStart
+        $checked = [bool]$this.Checked
+        if (Invoke-NMConfigEditAndApply -Reason 'Auto-start changed' -Edit {
+            param($config)
+            $config.AutoStart = $checked
+        }) {
             if ($script:NMConfig.AutoStart -and -not $script:NMPingTimer.Enabled) {
                 Start-NMMonitoring
                 Invoke-NMPingCycle
             }
             Set-NMSettingsFeedback -Message 'Auto-start setting saved.'
+        }
+        else {
+            $script:NMSettingsSuppress = $true
+            try { $this.Checked = $previous }
+            finally { $script:NMSettingsSuppress = $false }
         }
     }
 }
@@ -556,81 +736,83 @@ function New-NMTimingTab {
 function New-NMHealthTab {
     param([Parameter(Mandatory)][System.Windows.Forms.TabPage]$Tab)
 
-    $y = 22
-    $null = New-NMLabel -Parent $Tab -Text 'Health' -Bounds @(22, $y, 220, 22) -Font $script:NMFonts.SettingsBold
-    $y += 34
-    $null = New-NMNumericSetting -Parent $Tab -Label 'DOWN after failed pings' -Bounds @(22, $y, 110, 24) -Minimum 1 -Maximum 20 -Value ([int]$script:NMConfig.Health.DownFailures) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.Health.DownFailures = [int]$this.Value
-        [void](Invoke-NMConfigChanged -ResetMonitor -Reason 'Health threshold changed')
-    }
-    $y += 40
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Orange after failed pings' -Bounds @(22, $y, 110, 24) -Minimum 1 -Maximum 20 -Value ([int]$script:NMConfig.Health.OrangeFailures) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.Health.OrangeFailures = [int]$this.Value
-        [void](Invoke-NMConfigChanged -ResetMonitor -Reason 'Health threshold changed')
-    }
-    $y += 40
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Orange rolling loss (%)' -Bounds @(22, $y, 110, 24) -Minimum 0 -Maximum 100 -Value ([int]$script:NMConfig.Health.OrangeLossPercent) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.Health.OrangeLossPercent = [int]$this.Value
-        [void](Invoke-NMConfigChanged -ResetMonitor -Reason 'Health threshold changed')
+    $leftX = 24
+    $rightX = 392
+    $labelWidth = 210
+
+    $null = New-NMLabel -Parent $Tab -Text 'Health' -Bounds @($leftX, 24, 220, 24) -Font $script:NMFonts.SettingsBold
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'DOWN after failed pings' -X $leftX -Y 62 -LabelWidth $labelWidth -Minimum 1 -Maximum 20 -Value ([int]$script:NMConfig.Health.DownFailures) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'Health threshold changed' -Edit {
+            param($config)
+            $config.Health.DownFailures = [int]$box.Value
+        }) { return $true }
+        return $false
     }
 
-    $y = 22
-    $null = New-NMLabel -Parent $Tab -Text 'RTT' -Bounds @(398, $y, 220, 22) -Font $script:NMFonts.SettingsBold
-    $y += 34
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Green max (ms)' -Bounds @(398, $y, 110, 24) -Minimum 0 -Maximum 60000 -Value ([int]$script:NMConfig.RttThresholds.GreenMax) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $old = [int]$script:NMConfig.RttThresholds.GreenMax
-        $script:NMConfig.RttThresholds.GreenMax = [int]$this.Value
-        if (-not (Invoke-NMConfigChanged -ResetMonitor -Reason 'RTT threshold changed')) {
-            $script:NMConfig.RttThresholds.GreenMax = $old
-            $this.Value = $old
-        }
-    }
-    $y += 40
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Yellow max (ms)' -Bounds @(398, $y, 110, 24) -Minimum 1 -Maximum 60000 -Value ([int]$script:NMConfig.RttThresholds.YellowMax) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $old = [int]$script:NMConfig.RttThresholds.YellowMax
-        $script:NMConfig.RttThresholds.YellowMax = [int]$this.Value
-        if (-not (Invoke-NMConfigChanged -ResetMonitor -Reason 'RTT threshold changed')) {
-            $script:NMConfig.RttThresholds.YellowMax = $old
-            $this.Value = $old
-        }
-    }
-    $y += 40
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Orange max (ms)' -Bounds @(398, $y, 110, 24) -Minimum 1 -Maximum 60000 -Value ([int]$script:NMConfig.RttThresholds.OrangeMax) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $old = [int]$script:NMConfig.RttThresholds.OrangeMax
-        $script:NMConfig.RttThresholds.OrangeMax = [int]$this.Value
-        if (-not (Invoke-NMConfigChanged -ResetMonitor -Reason 'RTT threshold changed')) {
-            $script:NMConfig.RttThresholds.OrangeMax = $old
-            $this.Value = $old
-        }
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'Orange after failed pings' -X $leftX -Y 102 -LabelWidth $labelWidth -Minimum 1 -Maximum 20 -Value ([int]$script:NMConfig.Health.OrangeFailures) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'Health threshold changed' -Edit {
+            param($config)
+            $config.Health.OrangeFailures = [int]$box.Value
+        }) { return $true }
+        return $false
     }
 
-    $y += 54
-    $null = New-NMLabel -Parent $Tab -Text 'Loss' -Bounds @(398, $y, 220, 22) -Font $script:NMFonts.SettingsBold
-    $y += 34
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Yellow max (%)' -Bounds @(398, $y, 110, 24) -Minimum 0 -Maximum 100 -Value ([int]$script:NMConfig.LossThresholds.YellowMax) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $old = [int]$script:NMConfig.LossThresholds.YellowMax
-        $script:NMConfig.LossThresholds.YellowMax = [int]$this.Value
-        if (-not (Invoke-NMConfigChanged -ResetMonitor -Reason 'Loss threshold changed')) {
-            $script:NMConfig.LossThresholds.YellowMax = $old
-            $this.Value = $old
-        }
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'Orange rolling loss (%)' -X $leftX -Y 142 -LabelWidth $labelWidth -Minimum 0 -Maximum 100 -Value ([int]$script:NMConfig.Health.OrangeLossPercent) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'Health threshold changed' -Edit {
+            param($config)
+            $config.Health.OrangeLossPercent = [int]$box.Value
+        }) { return $true }
+        return $false
     }
-    $y += 40
-    $null = New-NMNumericSetting -Parent $Tab -Label 'Orange max (%)' -Bounds @(398, $y, 110, 24) -Minimum 0 -Maximum 100 -Value ([int]$script:NMConfig.LossThresholds.OrangeMax) -OnChanged {
-        if ($script:NMSettingsSuppress) { return }
-        $old = [int]$script:NMConfig.LossThresholds.OrangeMax
-        $script:NMConfig.LossThresholds.OrangeMax = [int]$this.Value
-        if (-not (Invoke-NMConfigChanged -ResetMonitor -Reason 'Loss threshold changed')) {
-            $script:NMConfig.LossThresholds.OrangeMax = $old
-            $this.Value = $old
-        }
+
+    $null = New-NMLabel -Parent $Tab -Text 'RTT' -Bounds @($rightX, 24, 220, 24) -Font $script:NMFonts.SettingsBold
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'Green max (ms)' -X $rightX -Y 62 -LabelWidth 180 -Minimum 0 -Maximum 60000 -Value ([int]$script:NMConfig.RttThresholds.GreenMax) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'RTT threshold changed' -Edit {
+            param($config)
+            $config.RttThresholds.GreenMax = [int]$box.Value
+        }) { return $true }
+        return $false
+    }
+
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'Yellow max (ms)' -X $rightX -Y 102 -LabelWidth 180 -Minimum 1 -Maximum 60000 -Value ([int]$script:NMConfig.RttThresholds.YellowMax) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'RTT threshold changed' -Edit {
+            param($config)
+            $config.RttThresholds.YellowMax = [int]$box.Value
+        }) { return $true }
+        return $false
+    }
+
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'Orange max (ms)' -X $rightX -Y 142 -LabelWidth 180 -Minimum 1 -Maximum 60000 -Value ([int]$script:NMConfig.RttThresholds.OrangeMax) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'RTT threshold changed' -Edit {
+            param($config)
+            $config.RttThresholds.OrangeMax = [int]$box.Value
+        }) { return $true }
+        return $false
+    }
+
+    $null = New-NMLabel -Parent $Tab -Text 'Loss' -Bounds @($rightX, 202, 220, 24) -Font $script:NMFonts.SettingsBold
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'Yellow max (%)' -X $rightX -Y 240 -LabelWidth 180 -Minimum 0 -Maximum 100 -Value ([int]$script:NMConfig.LossThresholds.YellowMax) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'Loss threshold changed' -Edit {
+            param($config)
+            $config.LossThresholds.YellowMax = [int]$box.Value
+        }) { return $true }
+        return $false
+    }
+
+    $null = New-NMSettingsNumericRow -Parent $Tab -Label 'Orange max (%)' -X $rightX -Y 280 -LabelWidth 180 -Minimum 0 -Maximum 100 -Value ([int]$script:NMConfig.LossThresholds.OrangeMax) -OnCommit {
+        param($box)
+        if (Invoke-NMConfigEditAndApply -ResetMonitor -Reason 'Loss threshold changed' -Edit {
+            param($config)
+            $config.LossThresholds.OrangeMax = [int]$box.Value
+        }) { return $true }
+        return $false
     }
 }
 
@@ -639,28 +821,52 @@ function New-NMGeneralTab {
 
     $null = New-NMCheckboxSetting -Parent $Tab -Text 'Always on top' -Bounds @(22, 26, 220, 28) -Checked ([bool]$script:NMConfig.AlwaysOnTop) -OnChanged {
         if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.AlwaysOnTop = [bool]$this.Checked
-        if (Invoke-NMConfigChanged -Reason 'Always on top changed') {
+        $previous = [bool]$script:NMConfig.AlwaysOnTop
+        $checked = [bool]$this.Checked
+        if (Invoke-NMConfigEditAndApply -Reason 'Always on top changed' -Edit {
+            param($config)
+            $config.AlwaysOnTop = $checked
+        }) {
             Apply-NMAlwaysOnTopState
             Set-NMSettingsFeedback -Message 'Always-on-top setting saved.'
+        }
+        else {
+            $script:NMSettingsSuppress = $true
+            try { $this.Checked = $previous }
+            finally { $script:NMSettingsSuppress = $false }
         }
     }
 
     $null = New-NMCheckboxSetting -Parent $Tab -Text 'Debug logging' -Bounds @(22, 64, 220, 28) -Checked ([bool]$script:NMConfig.DebugMode) -OnChanged {
         if ($script:NMSettingsSuppress) { return }
-        $script:NMConfig.DebugMode = [bool]$this.Checked
-        if (Invoke-NMConfigChanged -Reason 'Debug mode changed') {
+        $previous = [bool]$script:NMConfig.DebugMode
+        $checked = [bool]$this.Checked
+        if (Invoke-NMConfigEditAndApply -Reason 'Debug mode changed' -Edit {
+            param($config)
+            $config.DebugMode = $checked
+        }) {
             Set-NMSettingsFeedback -Message 'Debug mode setting saved.'
+        }
+        else {
+            $script:NMSettingsSuppress = $true
+            try { $this.Checked = $previous }
+            finally { $script:NMSettingsSuppress = $false }
         }
     }
 
     $null = New-NMButton -Parent $Tab -Text 'Reset Window Position' -Bounds @(22, 118, 172, 32) -OnClick {
-        $script:NMConfig.Window.X = $null
-        $script:NMConfig.Window.Y = $null
         Set-NMDefaultWindowLocation
-        Save-NMWindowPlacement
-        Save-NMCurrentConfig
-        Set-NMSettingsFeedback -Message 'Window position reset.'
+        $bounds = $script:NMForm.Bounds
+        if (Invoke-NMConfigEditAndApply -Reason 'Window position reset' -Edit {
+            param($config)
+            $config.Window.Maximized = $false
+            $config.Window.Width = [int]$bounds.Width
+            $config.Window.Height = [int]$bounds.Height
+            $config.Window.X = [int]$bounds.X
+            $config.Window.Y = [int]$bounds.Y
+        }) {
+            Set-NMSettingsFeedback -Message 'Window position reset.'
+        }
     }
 
     $null = New-NMButton -Parent $Tab -Text 'Reset to Defaults' -Bounds @(22, 168, 172, 32) -OnClick {
@@ -675,13 +881,21 @@ function New-NMGeneralTab {
             return
         }
 
-        $script:NMConfig = Get-NMDefaultConfig
-        Save-NMCurrentConfig
+        $defaultConfig = Get-NMDefaultConfig
+        try {
+            Save-NMConfig -Config $defaultConfig
+        }
+        catch {
+            Show-NMConfigError -Message $_.Exception.Message
+            return
+        }
+
+        $script:NMConfig = $defaultConfig
         $script:NMGeneration++
         Reset-NMMonitorState
         Apply-NMAlwaysOnTopState
         Apply-NMColumnsToGrid
-        Render-NMGrid
+        Update-NMGridFromState
         Set-NMDefaultWindowLocation
         if ($script:NMConfig.AutoStart) {
             Start-NMMonitoring
@@ -692,37 +906,45 @@ function New-NMGeneralTab {
     } -Primary
 }
 
-function Show-NMSettingsForm {
-    if ($script:NMSettingsForm -and -not $script:NMSettingsForm.IsDisposed) {
-        $script:NMSettingsForm.Activate()
-        $script:NMSettingsForm.Focus()
-        return
-    }
+function Build-NMSettingsForm {
+    $form = New-NMAppWindow `
+        -Name 'NetworkMonitorSettingsForm' `
+        -Title 'Network Monitor Settings' `
+        -Size (Get-NMSize 800 470) `
+        -MinimumSize (Get-NMSize 760 430) `
+        -ShowInTaskbar $false `
+        -TopMost ([bool]$script:NMConfig.AlwaysOnTop) `
+        -Resizable $false
 
-    $form = [System.Windows.Forms.Form]::new()
-    $form.Text = 'Network Monitor Settings'
-    $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
-    $form.Size = Get-NMSize 780 430
-    $form.MinimumSize = Get-NMSize 720 390
-    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
     $form.MaximizeBox = $false
     $form.MinimizeBox = $false
-    $form.ShowInTaskbar = $false
-    $form.BackColor = $script:NMColors.Window
-    $form.ForeColor = $script:NMColors.Text
     $form.Font = $script:NMFonts.Settings
-    $form.TopMost = [bool]$script:NMConfig.AlwaysOnTop
 
-    $ownerBounds = $script:NMForm.Bounds
-    $form.Location = Get-NMPoint ([math]::Max(0, $ownerBounds.Left + 36)) ([math]::Max(0, $ownerBounds.Top - 30))
+    if ($script:NMForm) {
+        $ownerBounds = $script:NMForm.Bounds
+        $form.Location = Get-NMPoint ([math]::Max(0, $ownerBounds.Left + 36)) ([math]::Max(0, $ownerBounds.Top - 30))
+    }
+    else {
+        $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+        $form.Location = Get-NMPoint ([int]($workingArea.Left + 80)) ([int]($workingArea.Top + 80))
+    }
+
+    $targetForm = $form
+    $title = New-NMTitleBar -Form $form -Title 'Network Monitor Settings' -Height 46 -Buttons @(
+        [ordered]@{ Key = 'Close'; Kind = 'Close'; ToolTip = 'Close'; OnClick = { $targetForm.Close() }.GetNewClosure() }
+    )
+    $script:NMSettingsCloseButton = $title.Buttons['Close']
+    $form.Controls.Add($title.Panel)
 
     $tabs = [System.Windows.Forms.TabControl]::new()
-    $tabs.Location = Get-NMPoint 12 12
-    $tabs.Size = Get-NMSize 742 326
+    $tabs.Name = 'NMSettingsTabs'
+    $tabs.Location = Get-NMPoint 12 58
+    $tabs.Size = Get-NMSize 772 342
     $tabs.Anchor = 'Top, Bottom, Left, Right'
     $tabs.BackColor = $script:NMColors.Window
     $tabs.ForeColor = $script:NMColors.Text
     $tabs.Font = $script:NMFonts.Settings
+    Use-NMTabTheme -TabControl $tabs
     $form.Controls.Add($tabs)
 
     foreach ($tabName in @('Targets', 'Columns', 'Timing', 'Health', 'General')) {
@@ -741,20 +963,40 @@ function Show-NMSettingsForm {
         }
     }
 
-    $script:NMSettingsFeedbackLabel = New-NMLabel -Parent $form -Text 'Settings save automatically on commit.' -Bounds @(14, 350, 560, 24) -ForeColor $script:NMColors.Muted
+    $script:NMSettingsFeedbackLabel = New-NMLabel -Parent $form -Text '' -Bounds @(14, 412, 740, 24) -ForeColor $script:NMColors.Muted
+    $script:NMSettingsFeedbackLabel.BackColor = $script:NMColors.Window
+    $script:NMSettingsFeedbackLabel.Visible = $false
 
     $form.Add_FormClosed({
-        $script:NMSettingsForm = $null
+        param($sender, $eventArgs)
+        [void]$eventArgs
+
+        if ($script:NMSettingsForm -eq $sender) {
+            $script:NMSettingsForm = $null
+        }
+
         $script:NMSettingsTargetsGrid = $null
         $script:NMSettingsColumnsList = $null
         $script:NMSettingsColumnOrderList = $null
         $script:NMSettingsColumnWidthBox = $null
         $script:NMSettingsFeedbackLabel = $null
-        if ($script:NMSettingsButton) {
+        $script:NMSettingsCloseButton = $null
+        if ($script:NMSettingsButton -and (-not $script:NMSettingsForm -or $script:NMSettingsForm.IsDisposed)) {
             Set-NMIconButtonActive -Button $script:NMSettingsButton -Active $false
         }
     })
 
+    return $form
+}
+
+function Show-NMSettingsForm {
+    if ($script:NMSettingsForm -and -not $script:NMSettingsForm.IsDisposed) {
+        $script:NMSettingsForm.Activate()
+        $script:NMSettingsForm.Focus()
+        return
+    }
+
+    $form = Build-NMSettingsForm
     $script:NMSettingsForm = $form
     if ($script:NMSettingsButton) {
         Set-NMIconButtonActive -Button $script:NMSettingsButton -Active $true

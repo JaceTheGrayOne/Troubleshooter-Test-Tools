@@ -1,4 +1,7 @@
 $script:NMWindowTitle = 'Network Monitor - Troubleshooter Test Tools'
+$script:NMTitleBarHeight = 46
+$script:NMGridHeaderHeight = 38
+$script:NMGridRowHeight = 52
 
 function Test-NMRectangleVisible {
     param([Parameter(Mandatory)][System.Drawing.Rectangle]$Rectangle)
@@ -25,9 +28,28 @@ function Set-NMDefaultWindowLocation {
     $script:NMForm.Location = Get-NMDefaultWindowLocation
 }
 
+function Get-NMCalculatedDefaultWindowSize {
+    $visibleWidth = 0
+    foreach ($column in @($script:NMConfig.Columns)) {
+        if ($column.Visible) {
+            $visibleWidth += [int]$column.Width
+        }
+    }
+
+    $enabledCount = [math]::Max(1, @(Get-NMEnabledTargets).Count)
+    $width = [math]::Max($script:NMForm.MinimumSize.Width, $visibleWidth + 28)
+    $height = [math]::Max(
+        $script:NMForm.MinimumSize.Height,
+        $script:NMTitleBarHeight + $script:NMGridHeaderHeight + ($enabledCount * $script:NMGridRowHeight) + 18
+    )
+
+    return Get-NMSize $width $height
+}
+
 function Apply-NMInitialWindowPlacement {
-    $width = [math]::Max([int]$script:NMConfig.Window.Width, $script:NMForm.MinimumSize.Width)
-    $height = [math]::Max([int]$script:NMConfig.Window.Height, $script:NMForm.MinimumSize.Height)
+    $defaultSize = Get-NMCalculatedDefaultWindowSize
+    $width = [math]::Max([int]$script:NMConfig.Window.Width, $defaultSize.Width)
+    $height = [math]::Max([int]$script:NMConfig.Window.Height, $defaultSize.Height)
     $script:NMForm.Size = Get-NMSize $width $height
 
     $hasPosition = ($null -ne $script:NMConfig.Window.X -and $null -ne $script:NMConfig.Window.Y)
@@ -70,6 +92,22 @@ function Save-NMWindowPlacement {
     }
 }
 
+function Show-NMConfigError {
+    param([Parameter(Mandatory)][string]$Message)
+
+    if ($script:NMForm) {
+        [System.Windows.Forms.MessageBox]::Show(
+            $script:NMForm,
+            $Message,
+            'Settings Rejected',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
+    }
+
+    Set-NMSettingsFeedback -Message $Message -Error
+}
+
 function Apply-NMAlwaysOnTopState {
     if ($script:NMForm) {
         $script:NMForm.TopMost = [bool]$script:NMConfig.AlwaysOnTop
@@ -87,24 +125,24 @@ function Invoke-NMMinimize {
 }
 
 function Invoke-NMToggleMaximize {
-    if ($script:NMForm.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
-        $script:NMForm.WindowState = [System.Windows.Forms.FormWindowState]::Normal
-    }
-    else {
-        $script:NMForm.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+    if ($script:NMForm) {
+        Invoke-NMFormMaximizeToggle -Form $script:NMForm
     }
 }
 
 function Invoke-NMTogglePin {
-    $script:NMConfig.AlwaysOnTop = -not [bool]$script:NMConfig.AlwaysOnTop
-    Apply-NMAlwaysOnTopState
-    Save-NMCurrentConfig
+    if (Invoke-NMConfigEditAndApply -Edit {
+        param($config)
+        $config.AlwaysOnTop = -not [bool]$config.AlwaysOnTop
+    } -Reason 'Always-on-top changed') {
+        Apply-NMAlwaysOnTopState
+    }
 }
 
 function Invoke-NMResetAndRefresh {
     $script:NMGeneration++
     Reset-NMMonitorState
-    Render-NMGrid
+    Update-NMGridFromState
     Start-NMMonitoring
     Invoke-NMPingCycle
 }
@@ -116,19 +154,10 @@ function Get-NMCellText {
         [Parameter(Mandatory)][string]$ColumnId
     )
 
-    switch ($ColumnId) {
-        'Node' { return [string]$Target.Name }
-        'Address' { return [string]$Target.Address }
-        'Status' { return (Get-NMStatusText -State $State) }
-        'RTT' { return (Get-NMRttText -State $State) }
-        'Loss' { return (Get-NMLossText -State $State) }
-        'TTL' { if ($State.LatestSuccess -and $null -ne $State.LatestTtl) { return [string]$State.LatestTtl }; return (Get-NMNeutralValue) }
-        'Bytes' { if ($State.LatestSuccess -and $null -ne $State.LatestBytes) { return [string]$State.LatestBytes }; return (Get-NMNeutralValue) }
-        default { return '' }
-    }
+    return (Get-NMColumnPresentation -State $State -Target $Target -ColumnId $ColumnId).Text
 }
 
-function Apply-NMColumnsToGrid {
+function Rebuild-NMGridColumns {
     if (-not $script:NMGrid) {
         return
     }
@@ -150,14 +179,33 @@ function Apply-NMColumnsToGrid {
             $column.MinimumWidth = [int]$definition.MinWidth
             $column.Visible = [bool]$columnConfig.Visible
             $column.SortMode = [System.Windows.Forms.DataGridViewColumnSortMode]::NotSortable
+            $column.DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleLeft
+            $column.DefaultCellStyle.Padding = [System.Windows.Forms.Padding]::new(14, 0, 6, 0)
             [void]$script:NMGrid.Columns.Add($column)
         }
     }
     finally {
         $script:NMSuppressColumnEvents = $false
     }
+}
 
-    Render-NMGrid
+function Get-NMColumnsFromGrid {
+    $columns = @()
+    foreach ($gridColumn in @($script:NMGrid.Columns | Sort-Object DisplayIndex)) {
+        $definition = $script:NMColumnDefinitions[[string]$gridColumn.Name]
+        if (-not $definition) {
+            continue
+        }
+
+        $width = [math]::Max([int]$gridColumn.Width, [int]$definition.MinWidth)
+        $columns += [ordered]@{
+            Id = [string]$gridColumn.Name
+            Visible = [bool]$gridColumn.Visible
+            Width = [int]$width
+        }
+    }
+
+    return @($columns)
 }
 
 function Update-NMConfigFromGridColumns {
@@ -165,32 +213,91 @@ function Update-NMConfigFromGridColumns {
         return
     }
 
-    $ordered = @($script:NMGrid.Columns | Sort-Object DisplayIndex)
-    $newColumns = @()
-    foreach ($gridColumn in $ordered) {
-        $configColumn = Get-NMConfigColumn -Id ([string]$gridColumn.Name)
-        if ($configColumn) {
-            $configColumn.Width = [int]$gridColumn.Width
-            $configColumn.Visible = [bool]$gridColumn.Visible
-            $newColumns += $configColumn
-        }
-    }
-    $script:NMConfig.Columns = @($newColumns)
-
+    $columns = @(Get-NMColumnsFromGrid)
     try {
-        Save-NMCurrentConfig
+        [void](Invoke-NMConfigEdit -Edit {
+            param($config)
+            $config.Columns = @($columns)
+        })
     }
     catch {
         Write-NMDebugLog -Message ("Column persistence failed: {0}" -f $_.Exception.Message)
     }
 }
 
-function Render-NMGrid {
+function Save-NMGridColumnLayoutIfDirty {
+    if (-not $script:NMColumnLayoutDirty) {
+        return
+    }
+
+    $script:NMColumnLayoutDirty = $false
+    Update-NMConfigFromGridColumns
+}
+
+function Schedule-NMGridColumnPersistence {
+    if ($script:NMSuppressColumnEvents -or -not $script:NMColumnPersistTimer) {
+        return
+    }
+
+    $script:NMColumnLayoutDirty = $true
+    $script:NMColumnPersistTimer.Stop()
+    $script:NMColumnPersistTimer.Start()
+}
+
+function Apply-NMColumnsToGrid {
+    Rebuild-NMGridColumns
+    Rebuild-NMGridRows
+}
+
+function Test-NMGridRowsCurrent {
+    if (-not $script:NMGrid -or -not $script:NMRowsByTarget) {
+        return $false
+    }
+
+    $targets = @(Get-NMEnabledTargets)
+    if ($script:NMGrid.Rows.Count -ne $targets.Count) {
+        return $false
+    }
+
+    for ($i = 0; $i -lt $targets.Count; $i++) {
+        if ([string]$script:NMGrid.Rows[$i].Tag -ne [string]$targets[$i].Name) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function Set-NMGridCellPresentation {
+    param(
+        [Parameter(Mandatory)][System.Windows.Forms.DataGridViewRow]$Row,
+        [Parameter(Mandatory)][string]$ColumnId,
+        [Parameter(Mandatory)]$Target,
+        [Parameter(Mandatory)][hashtable]$State
+    )
+
+    if (-not $script:NMGrid -or -not $script:NMGrid.Columns.Contains($ColumnId)) {
+        return $null
+    }
+
+    $presentation = Get-NMColumnPresentation -State $State -Target $Target -ColumnId $ColumnId
+    $cell = $Row.Cells[$ColumnId]
+    $cell.Value = $presentation.Text
+    $cell.Style.ForeColor = $presentation.ForeColor
+    $cell.Style.SelectionForeColor = $presentation.ForeColor
+    $cell.Style.Font = $presentation.Font
+    $cell.Style.Alignment = $presentation.Align
+    return $presentation
+}
+
+function Rebuild-NMGridRows {
     if (-not $script:NMGrid) {
         return
     }
 
+    $script:NMRowsByTarget = @{}
     $script:NMGrid.Rows.Clear()
+
     foreach ($target in Get-NMEnabledTargets) {
         $name = [string]$target.Name
         if (-not $script:NMTargetStates.ContainsKey($name)) {
@@ -202,36 +309,79 @@ function Render-NMGrid {
         foreach ($column in @($script:NMGrid.Columns)) {
             $values += (Get-NMCellText -State $state -Target $target -ColumnId ([string]$column.Name))
         }
+
         $rowIndex = $script:NMGrid.Rows.Add($values)
-        $script:NMGrid.Rows[$rowIndex].Tag = $name
-        $script:NMGrid.Rows[$rowIndex].Height = 70
+        $row = $script:NMGrid.Rows[$rowIndex]
+        $row.Tag = $name
+        $row.Height = $script:NMGridRowHeight
+        $row.DefaultCellStyle.BackColor = if ($rowIndex % 2 -eq 0) { $script:NMColors.Grid } else { $script:NMColors.GridAlt }
+        $row.DefaultCellStyle.SelectionBackColor = $row.DefaultCellStyle.BackColor
+        $row.DefaultCellStyle.SelectionForeColor = $script:NMColors.Text
+        foreach ($column in @($script:NMGrid.Columns)) {
+            [void](Set-NMGridCellPresentation -Row $row -ColumnId ([string]$column.Name) -Target $target -State $state)
+        }
+        $script:NMRowsByTarget[$name] = $row
     }
 
     $script:NMGrid.ClearSelection()
     $script:NMGrid.CurrentCell = $null
 }
 
-function Draw-NMGridText {
+function Update-NMGridRow {
     param(
-        [Parameter(Mandatory)][System.Drawing.Graphics]$Graphics,
-        [Parameter(Mandatory)][System.Drawing.Rectangle]$Bounds,
-        [Parameter(Mandatory)][string]$Text,
-        [Parameter(Mandatory)][System.Drawing.Color]$Color,
-        [System.Drawing.Font]$Font = $script:NMFonts.Grid
+        [Parameter(Mandatory)]$Target,
+        [Parameter(Mandatory)][hashtable]$State
     )
 
-    $rect = Get-NMRectangle ($Bounds.X + 16) $Bounds.Y ([math]::Max(1, $Bounds.Width - 22)) $Bounds.Height
-    [System.Windows.Forms.TextRenderer]::DrawText(
-        $Graphics,
-        $Text,
-        $Font,
-        $rect,
-        $Color,
-        ([System.Windows.Forms.TextFormatFlags]::Left -bor [System.Windows.Forms.TextFormatFlags]::VerticalCenter -bor [System.Windows.Forms.TextFormatFlags]::EndEllipsis)
-    )
+    if (-not $script:NMGrid -or -not $script:NMRowsByTarget) {
+        return
+    }
+
+    $name = [string]$Target.Name
+    if (-not $script:NMRowsByTarget.ContainsKey($name)) {
+        return
+    }
+
+    $row = $script:NMRowsByTarget[$name]
+    if ($row.Index -lt 0) {
+        return
+    }
+
+    foreach ($column in @($script:NMGrid.Columns)) {
+        $columnId = [string]$column.Name
+        $presentation = Set-NMGridCellPresentation -Row $row -ColumnId $columnId -Target $Target -State $State
+        if ($presentation.PaintKind -ne 'Text') {
+            $script:NMGrid.InvalidateCell($row.Cells[$columnId])
+        }
+    }
 }
 
-function Draw-NMGridBorder {
+function Update-NMGridFromState {
+    if (-not $script:NMGrid) {
+        return
+    }
+
+    if (-not (Test-NMGridRowsCurrent)) {
+        Rebuild-NMGridRows
+    }
+
+    foreach ($target in Get-NMEnabledTargets) {
+        $name = [string]$target.Name
+        if (-not $script:NMTargetStates.ContainsKey($name)) {
+            $script:NMTargetStates[$name] = New-NMTargetState
+        }
+
+        Update-NMGridRow -Target $target -State $script:NMTargetStates[$name]
+    }
+
+    $script:NMGrid.Invalidate()
+}
+
+function Render-NMGrid {
+    Update-NMGridFromState
+}
+
+function Draw-NMGridCellBorder {
     param(
         [Parameter(Mandatory)][System.Drawing.Graphics]$Graphics,
         [Parameter(Mandatory)][System.Drawing.Rectangle]$Bounds
@@ -246,29 +396,46 @@ function Draw-NMGridBorder {
     }
 }
 
+function Fill-NMGridCellBackground {
+    param(
+        [Parameter(Mandatory)][System.Drawing.Graphics]$Graphics,
+        [Parameter(Mandatory)][System.Drawing.Rectangle]$Bounds,
+        [Parameter(Mandatory)][int]$RowIndex
+    )
+
+    $background = if ($RowIndex % 2 -eq 0) { $script:NMColors.Grid } else { $script:NMColors.GridAlt }
+    $brush = [System.Drawing.SolidBrush]::new($background)
+    try {
+        $Graphics.FillRectangle($brush, $Bounds)
+    }
+    finally {
+        $brush.Dispose()
+    }
+}
+
 function Draw-NMStatusCell {
     param(
         [Parameter(Mandatory)][System.Drawing.Graphics]$Graphics,
         [Parameter(Mandatory)][System.Drawing.Rectangle]$Bounds,
-        [Parameter(Mandatory)][hashtable]$State
+        [Parameter(Mandatory)]$Presentation
     )
 
-    $healthColor = Get-NMThemeColor -Name (Get-NMHealthName -State $State)
-    $brush = [System.Drawing.SolidBrush]::new($healthColor)
+    $brush = [System.Drawing.SolidBrush]::new($Presentation.ForeColor)
     try {
-        $dotSize = 22
-        $dotX = $Bounds.X + 26
+        $dotSize = 16
+        $dotX = $Bounds.X + 18
         $dotY = $Bounds.Y + [int](($Bounds.Height - $dotSize) / 2)
         $Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         $Graphics.FillEllipse($brush, $dotX, $dotY, $dotSize, $dotSize)
-        $textBounds = Get-NMRectangle ($Bounds.X + 64) $Bounds.Y ([math]::Max(1, $Bounds.Width - 70)) $Bounds.Height
+
+        $textBounds = Get-NMRectangle ($dotX + $dotSize + 12) $Bounds.Y ([math]::Max(1, $Bounds.Right - ($dotX + $dotSize + 16))) $Bounds.Height
         [System.Windows.Forms.TextRenderer]::DrawText(
             $Graphics,
-            (Get-NMStatusText -State $State),
-            $script:NMFonts.GridBold,
+            ([string]$Presentation.Text),
+            $Presentation.Font,
             $textBounds,
-            $healthColor,
-            ([System.Windows.Forms.TextFormatFlags]::Left -bor [System.Windows.Forms.TextFormatFlags]::VerticalCenter)
+            $Presentation.ForeColor,
+            ([System.Windows.Forms.TextFormatFlags]::Left -bor [System.Windows.Forms.TextFormatFlags]::VerticalCenter -bor [System.Windows.Forms.TextFormatFlags]::EndEllipsis -bor [System.Windows.Forms.TextFormatFlags]::NoPrefix)
         )
     }
     finally {
@@ -291,24 +458,16 @@ function Draw-NMHistoryCell {
     }
     $display += $samples
 
-    $left = $Bounds.X + 16
-    $available = [math]::Max(1, $Bounds.Width - 32)
+    $left = $Bounds.X + 12
+    $available = [math]::Max(1, $Bounds.Width - 24)
     $slot = $available / [math]::Max(1, $length)
-    $barWidth = [math]::Max(3, [math]::Min(7, [int]($slot * 0.38)))
-    $barHeight = 28
+    $barWidth = [math]::Max(3, [math]::Min(6, [int]($slot * 0.42)))
+    $barHeight = [math]::Min(24, [math]::Max(16, $Bounds.Height - 24))
     $top = $Bounds.Y + [int](($Bounds.Height - $barHeight) / 2)
 
     for ($i = 0; $i -lt $length; $i++) {
         $sample = $display[$i]
-        $color = if ($null -eq $sample) {
-            $script:NMColors.Yellow
-        }
-        elseif ([bool]$sample) {
-            $script:NMColors.Green
-        }
-        else {
-            $script:NMColors.Red
-        }
+        $color = Get-NMHistorySampleColor -Sample $sample
 
         $brush = [System.Drawing.SolidBrush]::new($color)
         try {
@@ -337,26 +496,59 @@ function Initialize-NMGrid {
     $grid.AllowUserToResizeColumns = $true
     $grid.ReadOnly = $true
     $grid.MultiSelect = $false
-    $grid.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+    $grid.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::CellSelect
     $grid.ScrollBars = [System.Windows.Forms.ScrollBars]::Both
     $grid.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::None
     $grid.EnableHeadersVisualStyles = $false
     $grid.ColumnHeadersHeightSizeMode = [System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode]::DisableResizing
-    $grid.ColumnHeadersHeight = 58
+    $grid.ColumnHeadersHeight = $script:NMGridHeaderHeight
+    $grid.RowTemplate.Height = $script:NMGridRowHeight
     $grid.DefaultCellStyle.BackColor = $script:NMColors.Grid
     $grid.DefaultCellStyle.ForeColor = $script:NMColors.Text
     $grid.DefaultCellStyle.SelectionBackColor = $script:NMColors.Grid
     $grid.DefaultCellStyle.SelectionForeColor = $script:NMColors.Text
     $grid.DefaultCellStyle.Font = $script:NMFonts.Grid
+    $grid.DefaultCellStyle.Padding = [System.Windows.Forms.Padding]::new(14, 0, 6, 0)
+    $grid.AlternatingRowsDefaultCellStyle.BackColor = $script:NMColors.GridAlt
+    $grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = $script:NMColors.GridAlt
     $grid.ColumnHeadersDefaultCellStyle.BackColor = $script:NMColors.SurfaceAlt
     $grid.ColumnHeadersDefaultCellStyle.ForeColor = $script:NMColors.Text
+    $grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = $script:NMColors.SurfaceAlt
+    $grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = $script:NMColors.Text
     $grid.ColumnHeadersDefaultCellStyle.Font = $script:NMFonts.GridHeader
     $grid.ColumnHeadersDefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleLeft
+    $grid.ColumnHeadersDefaultCellStyle.Padding = [System.Windows.Forms.Padding]::new(14, 0, 6, 0)
+
+    $grid.Add_CellFormatting({
+        param($sender, $eventArgs)
+
+        if ($eventArgs.RowIndex -lt 0 -or $eventArgs.ColumnIndex -lt 0) {
+            return
+        }
+
+        $columnId = [string]$sender.Columns[$eventArgs.ColumnIndex].Name
+        $name = [string]$sender.Rows[$eventArgs.RowIndex].Tag
+        if ([string]::IsNullOrWhiteSpace($name) -or -not $script:NMTargetStates.ContainsKey($name)) {
+            return
+        }
+
+        $target = Get-NMTargetByName -Name $name
+        if (-not $target) {
+            return
+        }
+
+        $presentation = Get-NMColumnPresentation -State $script:NMTargetStates[$name] -Target $target -ColumnId $columnId
+        $eventArgs.Value = $presentation.Text
+        $eventArgs.CellStyle.ForeColor = $presentation.ForeColor
+        $eventArgs.CellStyle.SelectionForeColor = $presentation.ForeColor
+        $eventArgs.CellStyle.Font = $presentation.Font
+        $eventArgs.CellStyle.Alignment = $presentation.Align
+    })
 
     $grid.Add_CellPainting({
         param($sender, $eventArgs)
 
-        if ($eventArgs.RowIndex -lt 0) {
+        if ($eventArgs.RowIndex -lt 0 -or $eventArgs.ColumnIndex -lt 0) {
             return
         }
 
@@ -372,44 +564,38 @@ function Initialize-NMGrid {
         }
 
         $state = $script:NMTargetStates[$name]
-        $background = if ($eventArgs.RowIndex % 2 -eq 0) { $script:NMColors.Grid } else { $script:NMColors.GridAlt }
-        $eventArgs.Graphics.Clear($background)
-
-        switch ($columnId) {
-            'Node' {
-                Draw-NMGridText -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -Text ([string]$target.Name) -Color (ConvertTo-NMDrawingColor -HtmlColor ([string]$target.Color)) -Font $script:NMFonts.GridBold
-                $eventArgs.Handled = $true
-            }
-            'Status' {
-                Draw-NMStatusCell -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -State $state
-                $eventArgs.Handled = $true
-            }
-            'RTT' {
-                Draw-NMGridText -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -Text (Get-NMRttText -State $state) -Color (Get-NMThemeColor -Name (Get-NMRttHealthName -State $state))
-                $eventArgs.Handled = $true
-            }
-            'Loss' {
-                Draw-NMGridText -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -Text (Get-NMLossText -State $state) -Color (Get-NMThemeColor -Name (Get-NMLossHealthName -State $state))
-                $eventArgs.Handled = $true
-            }
-            'History' {
-                Draw-NMHistoryCell -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -State $state
-                $eventArgs.Handled = $true
-            }
-            default {
-                Draw-NMGridText -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -Text ([string]$eventArgs.FormattedValue) -Color $script:NMColors.Text
-                $eventArgs.Handled = $true
-            }
+        $presentation = Get-NMColumnPresentation -State $state -Target $target -ColumnId $columnId
+        if ($presentation.PaintKind -eq 'Text') {
+            return
         }
 
-        Draw-NMGridBorder -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds
+        try {
+            $eventArgs.Handled = $true
+            Fill-NMGridCellBackground -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -RowIndex $eventArgs.RowIndex
+
+            if ($presentation.PaintKind -eq 'Status') {
+                Draw-NMStatusCell -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -Presentation $presentation
+            }
+            elseif ($presentation.PaintKind -eq 'History') {
+                Draw-NMHistoryCell -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds -State $state
+            }
+
+            Draw-NMGridCellBorder -Graphics $eventArgs.Graphics -Bounds $eventArgs.CellBounds
+        }
+        catch {
+            $eventArgs.Handled = $false
+            Write-NMDebugLog -Message ("Grid paint failed for row {0}, column {1}, target {2}: {3}" -f $eventArgs.RowIndex, $columnId, $name, $_.Exception.Message)
+        }
     })
 
-    $grid.Add_ColumnWidthChanged({
-        Update-NMConfigFromGridColumns
-    })
-    $grid.Add_ColumnDisplayIndexChanged({
-        Update-NMConfigFromGridColumns
+    $grid.Add_ColumnWidthChanged({ Schedule-NMGridColumnPersistence })
+    $grid.Add_ColumnDisplayIndexChanged({ Schedule-NMGridColumnPersistence })
+
+    $script:NMColumnPersistTimer = [System.Windows.Forms.Timer]::new()
+    $script:NMColumnPersistTimer.Interval = 700
+    $script:NMColumnPersistTimer.Add_Tick({
+        $script:NMColumnPersistTimer.Stop()
+        Save-NMGridColumnLayoutIfDirty
     })
 
     $script:NMGrid = $grid
@@ -418,81 +604,32 @@ function Initialize-NMGrid {
 }
 
 function Initialize-NMTitleBar {
-    $titleBar = [System.Windows.Forms.Panel]::new()
-    $titleBar.Dock = [System.Windows.Forms.DockStyle]::Top
-    $titleBar.Height = 66
-    $titleBar.BackColor = $script:NMColors.TitleBar
-    Enable-NMTitleDrag -Control $titleBar -Form $script:NMForm
+    $title = New-NMTitleBar -Form $script:NMForm -Title $script:NMWindowTitle -CanMaximize -Height $script:NMTitleBarHeight -Buttons @(
+        [ordered]@{ Key = 'Settings'; Kind = 'Settings'; ToolTip = 'Settings'; OnClick = { Show-NMSettingsForm }; Active = ($script:NMSettingsForm -and -not $script:NMSettingsForm.IsDisposed) }
+        [ordered]@{ Key = 'Refresh'; Kind = 'Refresh'; ToolTip = 'Reset monitor data'; OnClick = { Invoke-NMResetAndRefresh } }
+        [ordered]@{ Key = 'Pin'; Kind = 'Pin'; ToolTip = 'Always on top'; OnClick = { Invoke-NMTogglePin }; Active = [bool]$script:NMConfig.AlwaysOnTop }
+        [ordered]@{ Kind = 'Separator' }
+        [ordered]@{ Key = 'Minimize'; Kind = 'Minimize'; ToolTip = 'Minimize'; OnClick = { Invoke-NMMinimize } }
+        [ordered]@{ Key = 'Maximize'; Kind = 'Maximize'; ToolTip = 'Maximize or restore'; OnClick = { Invoke-NMToggleMaximize } }
+        [ordered]@{ Key = 'Close'; Kind = 'Close'; ToolTip = 'Close'; OnClick = { $script:NMForm.Close() } }
+    )
 
-    $icon = [System.Windows.Forms.Panel]::new()
-    $icon.Location = Get-NMPoint 18 13
-    $icon.Size = Get-NMSize 44 40
-    $icon.BackColor = $script:NMColors.TitleBar
-    $icon.Add_Paint({
-        param($sender, $eventArgs)
-        Draw-NMIcon -Kind 'Monitor' -Graphics $eventArgs.Graphics -Bounds $sender.ClientRectangle -Color $script:NMColors.Text
-    })
-    Enable-NMTitleDrag -Control $icon -Form $script:NMForm
-    $titleBar.Controls.Add($icon)
+    $script:NMSettingsButton = $title.Buttons['Settings']
+    $script:NMRefreshButton = $title.Buttons['Refresh']
+    $script:NMPinButton = $title.Buttons['Pin']
+    $script:NMMinimizeButton = $title.Buttons['Minimize']
+    $script:NMMaximizeButton = $title.Buttons['Maximize']
+    $script:NMCloseButton = $title.Buttons['Close']
 
-    $titleLabel = [System.Windows.Forms.Label]::new()
-    $titleLabel.Text = $script:NMWindowTitle
-    $titleLabel.AutoSize = $false
-    $titleLabel.Location = Get-NMPoint 78 13
-    $titleLabel.Size = Get-NMSize 560 40
-    $titleLabel.Anchor = 'Top, Left, Right'
-    $titleLabel.BackColor = $script:NMColors.TitleBar
-    $titleLabel.ForeColor = $script:NMColors.Text
-    $titleLabel.Font = $script:NMFonts.Title
-    $titleLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-    Enable-NMTitleDrag -Control $titleLabel -Form $script:NMForm
-    $titleBar.Controls.Add($titleLabel)
-
-    $buttonPanel = [System.Windows.Forms.Panel]::new()
-    $buttonPanel.Dock = [System.Windows.Forms.DockStyle]::Right
-    $buttonPanel.Width = 342
-    $buttonPanel.BackColor = $script:NMColors.TitleBar
-    $titleBar.Controls.Add($buttonPanel)
-
-    $script:NMSettingsButton = New-NMIconButton -Parent $buttonPanel -Kind 'Settings' -ToolTipText 'Settings' -Bounds @(0, 10, 46, 46) -OnClick { Show-NMSettingsForm }
-    $script:NMRefreshButton = New-NMIconButton -Parent $buttonPanel -Kind 'Refresh' -ToolTipText 'Reset monitor data' -Bounds @(48, 10, 46, 46) -OnClick { Invoke-NMResetAndRefresh }
-    $script:NMPinButton = New-NMIconButton -Parent $buttonPanel -Kind 'Pin' -ToolTipText 'Always on top' -Bounds @(96, 10, 46, 46) -OnClick { Invoke-NMTogglePin }
-
-    $separator = [System.Windows.Forms.Panel]::new()
-    $separator.Location = Get-NMPoint 154 10
-    $separator.Size = Get-NMSize 1 46
-    $separator.BackColor = $script:NMColors.GridLine
-    $buttonPanel.Controls.Add($separator)
-
-    $script:NMMinimizeButton = New-NMIconButton -Parent $buttonPanel -Kind 'Minimize' -ToolTipText 'Minimize' -Bounds @(176, 10, 46, 46) -OnClick { Invoke-NMMinimize }
-    $script:NMMaximizeButton = New-NMIconButton -Parent $buttonPanel -Kind 'Maximize' -ToolTipText 'Maximize or restore' -Bounds @(224, 10, 46, 46) -OnClick { Invoke-NMToggleMaximize }
-    $script:NMCloseButton = New-NMIconButton -Parent $buttonPanel -Kind 'Close' -ToolTipText 'Close' -Bounds @(276, 10, 46, 46) -OnClick { $script:NMForm.Close() }
-
-    Set-NMIconButtonActive -Button $script:NMPinButton -Active ([bool]$script:NMConfig.AlwaysOnTop)
-    return $titleBar
+    return $title.Panel
 }
 
-function Invoke-NMConfigChanged {
+function Apply-NMRuntimeConfigEffects {
     param(
         [switch]$ResetMonitor,
         [switch]$RebuildGrid,
         [AllowEmptyString()][string]$Reason = ''
     )
-
-    try {
-        Save-NMCurrentConfig
-    }
-    catch {
-        [System.Windows.Forms.MessageBox]::Show(
-            $script:NMForm,
-            $_.Exception.Message,
-            'Settings Rejected',
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Error
-        ) | Out-Null
-        Set-NMSettingsFeedback -Message $_.Exception.Message -Error
-        return $false
-    }
 
     if (-not [string]::IsNullOrWhiteSpace($Reason)) {
         Write-NMDebugLog -Message $Reason
@@ -510,13 +647,50 @@ function Invoke-NMConfigChanged {
         Apply-NMColumnsToGrid
     }
     else {
-        Render-NMGrid
+        Update-NMGridFromState
     }
 
     if ($ResetMonitor -and $script:NMPingTimer -and $script:NMPingTimer.Enabled) {
         Invoke-NMPingCycle
     }
+}
 
+function Invoke-NMConfigChanged {
+    param(
+        [switch]$ResetMonitor,
+        [switch]$RebuildGrid,
+        [AllowEmptyString()][string]$Reason = ''
+    )
+
+    try {
+        Save-NMCurrentConfig
+    }
+    catch {
+        Show-NMConfigError -Message $_.Exception.Message
+        return $false
+    }
+
+    Apply-NMRuntimeConfigEffects -ResetMonitor:$ResetMonitor -RebuildGrid:$RebuildGrid -Reason $Reason
+    return $true
+}
+
+function Invoke-NMConfigEditAndApply {
+    param(
+        [Parameter(Mandatory)][scriptblock]$Edit,
+        [switch]$ResetMonitor,
+        [switch]$RebuildGrid,
+        [AllowEmptyString()][string]$Reason = ''
+    )
+
+    try {
+        [void](Invoke-NMConfigEdit -Edit $Edit)
+    }
+    catch {
+        Show-NMConfigError -Message $_.Exception.Message
+        return $false
+    }
+
+    Apply-NMRuntimeConfigEffects -ResetMonitor:$ResetMonitor -RebuildGrid:$RebuildGrid -Reason $Reason
     return $true
 }
 
@@ -524,53 +698,86 @@ function Invoke-NMOnPingResults {
     param([AllowNull()]$Results)
 
     Update-NMStateFromPingResults -Results $Results
-    Render-NMGrid
+    Update-NMGridFromState
+}
+
+function Register-NMRuntimeExceptionHandlers {
+    if ($script:NMRuntimeExceptionHandlersRegistered) {
+        return
+    }
+
+    $script:NMRuntimeExceptionHandlersRegistered = $true
+
+    [System.Windows.Forms.Application]::add_ThreadException({
+        param($sender, $eventArgs)
+        [void]$sender
+        $details = $eventArgs.Exception.ToString()
+        if ($eventArgs.Exception.PSObject.Properties['ScriptStackTrace'] -and $eventArgs.Exception.ScriptStackTrace) {
+            $details = "{0}`n{1}" -f $details, $eventArgs.Exception.ScriptStackTrace
+        }
+        $message = "WinForms thread exception: $($eventArgs.Exception.Message)"
+        Write-NMDebugLog -Message $message
+        Write-NMStartupErrorLog -Message ("{0}`n{1}" -f $message, $details)
+        [System.Windows.Forms.MessageBox]::Show(
+            $message,
+            'Network Monitor Error',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
+    })
+
+    [System.AppDomain]::CurrentDomain.add_UnhandledException({
+        param($sender, $eventArgs)
+        [void]$sender
+        $exception = $eventArgs.ExceptionObject
+        $message = if ($exception -is [System.Exception]) { $exception.Message } else { [string]$exception }
+        Write-NMStartupErrorLog -Message ("Unhandled exception: {0}" -f $message)
+    })
 }
 
 function Build-NMMainForm {
-    $form = [NetworkMonitorForm]::new()
-    $form.Text = $script:NMWindowTitle
-    $form.Name = 'NetworkMonitorMainForm'
-    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
-    $form.ShowInTaskbar = $true
-    $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
-    $form.MinimumSize = Get-NMSize 820 260
-    $form.BackColor = $script:NMColors.Window
-    $form.ForeColor = $script:NMColors.Text
+    $form = New-NMAppWindow `
+        -Name 'NetworkMonitorMainForm' `
+        -Title $script:NMWindowTitle `
+        -Size (Get-NMSize ([int]$script:NMConfig.Window.Width) ([int]$script:NMConfig.Window.Height)) `
+        -MinimumSize (Get-NMSize 820 260) `
+        -ShowInTaskbar $true `
+        -TopMost ([bool]$script:NMConfig.AlwaysOnTop) `
+        -Resizable $true
+
     $form.Font = $script:NMFonts.Grid
-    $form.TopMost = [bool]$script:NMConfig.AlwaysOnTop
-    $form.KeyPreview = $true
     $script:NMForm = $form
 
     Apply-NMInitialWindowPlacement
-
-    $form.Add_Paint({
-        param($sender, $eventArgs)
-        [void]$sender
-        $pen = [System.Drawing.Pen]::new($script:NMColors.Border, 1)
-        try {
-            $eventArgs.Graphics.DrawRectangle($pen, 0, 0, $script:NMForm.ClientSize.Width - 1, $script:NMForm.ClientSize.Height - 1)
-        }
-        finally {
-            $pen.Dispose()
-        }
-    })
 
     $titleBar = Initialize-NMTitleBar
     $grid = Initialize-NMGrid
     $form.Controls.Add($grid)
     $form.Controls.Add($titleBar)
 
+    $form.Add_Shown({
+        if ($script:NMConfig.AutoStart) {
+            Start-NMMonitoring
+            Invoke-NMPingCycle
+        }
+    })
+
     $form.Add_SizeChanged({
+        if (-not $script:NMForm -or $script:NMForm.IsDisposed) {
+            return
+        }
+
         if ($script:NMMaximizeButton) {
             $kind = if ($script:NMForm.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) { 'Restore' } else { 'Maximize' }
             Set-NMIconButtonKind -Button $script:NMMaximizeButton -Kind $kind
         }
+
         $script:NMForm.Invalidate()
     })
 
     $form.Add_FormClosing({
         Stop-NMMonitoring
+        Save-NMGridColumnLayoutIfDirty
         Save-NMWindowPlacement
         try {
             Save-NMCurrentConfig
@@ -588,20 +795,15 @@ function Start-NetworkMonitorApp {
 
     [System.Windows.Forms.Application]::EnableVisualStyles()
     [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
+    Register-NMRuntimeExceptionHandlers
 
     Initialize-NMTheme
     $script:NMAppRoot = $AppRoot
     $script:NMConfig = Initialize-NMConfig -AppRoot $AppRoot
     $script:NMGeneration = 1
     Initialize-NMMonitorState
-
-    $form = Build-NMMainForm
     Initialize-NMPingEngine
 
-    if ($script:NMConfig.AutoStart) {
-        Start-NMMonitoring
-        Invoke-NMPingCycle
-    }
-
+    $form = Build-NMMainForm
     [void][System.Windows.Forms.Application]::Run($form)
 }

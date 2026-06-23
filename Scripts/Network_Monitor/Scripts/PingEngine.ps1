@@ -1,119 +1,18 @@
 function Initialize-NMPingEngine {
-    $script:NMPingWorker = [System.ComponentModel.BackgroundWorker]::new()
-    $script:NMPingWorker.WorkerSupportsCancellation = $false
-
-    $script:NMPingWorker.Add_DoWork({
-        param($sender, $eventArgs)
-        [void]$sender
-
-        $argument = $eventArgs.Argument
-        $errors = [System.Collections.ArrayList]::new()
-        $jobs = [System.Collections.ArrayList]::new()
-
-        foreach ($target in @($argument.Targets)) {
-            $ping = [System.Net.NetworkInformation.Ping]::new()
-            try {
-                $task = $ping.SendPingAsync([string]$target.Address, [int]$argument.TimeoutMs)
-                [void]$jobs.Add([pscustomobject]@{
-                    Name = [string]$target.Name
-                    Address = [string]$target.Address
-                    Ping = $ping
-                    Task = $task
-                })
-            }
-            catch {
-                $ping.Dispose()
-                [void]$errors.Add("Unable to start ping for $($target.Name): $($_.Exception.Message)")
-                [void]$jobs.Add([pscustomobject]@{
-                    Name = [string]$target.Name
-                    Address = [string]$target.Address
-                    Ping = $null
-                    Task = $null
-                })
-            }
-        }
-
-        $tasks = @($jobs | Where-Object { $null -ne $_.Task } | ForEach-Object { $_.Task })
-        if ($tasks.Count -gt 0) {
-            try {
-                [System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]$tasks)
-            }
-            catch {
-                [void]$errors.Add("Ping cycle wait error: $($_.Exception.Message)")
-            }
-        }
-
-        $results = [System.Collections.ArrayList]::new()
-        foreach ($job in @($jobs)) {
-            $entry = [ordered]@{
-                Name = [string]$job.Name
-                Address = [string]$job.Address
-                Success = $false
-                RttMs = $null
-                Bytes = $null
-                Ttl = $null
-            }
-
-            try {
-                if ($job.Task) {
-                    $reply = $job.Task.Result
-                    if ($reply.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
-                        $entry.Success = $true
-                        $entry.RttMs = [int]$reply.RoundtripTime
-                        $entry.Bytes = [int]$reply.Buffer.Length
-                        if ($reply.Options) {
-                            $entry.Ttl = [int]$reply.Options.Ttl
-                        }
-                    }
-                }
-            }
-            catch {
-                [void]$errors.Add("Ping result error for $($job.Name): $($_.Exception.Message)")
-            }
-            finally {
-                if ($job.Ping) {
-                    $job.Ping.Dispose()
-                }
-            }
-
-            [void]$results.Add([pscustomobject]$entry)
-        }
-
-        $eventArgs.Result = [pscustomobject]@{
-            Generation = [int]$argument.Generation
-            Results = @($results)
-            Errors = @($errors)
-        }
-    })
-
-    $script:NMPingWorker.Add_RunWorkerCompleted({
-        param($sender, $eventArgs)
-        [void]$sender
-
-        if ($eventArgs.Error) {
-            Write-NMDebugLog -Message ("Ping worker failed: {0}" -f $eventArgs.Error.Message)
-            return
-        }
-
-        $payload = $eventArgs.Result
-        foreach ($message in @($payload.Errors)) {
-            Write-NMDebugLog -Message $message
-        }
-
-        if ([int]$payload.Generation -ne [int]$script:NMGeneration) {
-            if ($script:NMPingTimer -and $script:NMPingTimer.Enabled) {
-                Invoke-NMPingCycle
-            }
-            return
-        }
-
-        Invoke-NMOnPingResults -Results $payload.Results
-    })
+    $script:NMPingCycleBusy = $false
+    $script:NMPingCycleJobs = @()
+    $script:NMPingCycleGeneration = 0
 
     $script:NMPingTimer = [System.Windows.Forms.Timer]::new()
     $script:NMPingTimer.Interval = [int]$script:NMConfig.RefreshMilliseconds
     $script:NMPingTimer.Add_Tick({
         Invoke-NMPingCycle
+    })
+
+    $script:NMPingCompletionTimer = [System.Windows.Forms.Timer]::new()
+    $script:NMPingCompletionTimer.Interval = 50
+    $script:NMPingCompletionTimer.Add_Tick({
+        Complete-NMPingCycleIfReady
     })
 }
 
@@ -138,27 +37,151 @@ function Stop-NMMonitoring {
     if ($script:NMPingTimer) {
         $script:NMPingTimer.Stop()
     }
+    if ($script:NMPingCompletionTimer) {
+        $script:NMPingCompletionTimer.Stop()
+    }
+
+    Clear-NMPingCycleJobs
+    $script:NMPingCycleBusy = $false
+}
+
+function Clear-NMPingCycleJobs {
+    foreach ($job in @($script:NMPingCycleJobs)) {
+        if ($job.Ping) {
+            try { $job.Ping.Dispose() }
+            catch { }
+        }
+    }
+
+    $script:NMPingCycleJobs = @()
+}
+
+function New-NMFailedPingJob {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Address,
+        [AllowEmptyString()][string]$ErrorMessage = ''
+    )
+
+    return [pscustomobject]@{
+        Name = $Name
+        Address = $Address
+        Ping = $null
+        Task = $null
+        StartError = $ErrorMessage
+    }
 }
 
 function Invoke-NMPingCycle {
-    if (-not $script:NMPingWorker -or $script:NMPingWorker.IsBusy) {
+    if (-not $script:NMPingTimer -or $script:NMPingCycleBusy) {
         return
     }
 
-    $targets = @(Get-NMEnabledTargets | ForEach-Object {
-        [pscustomobject]@{
-            Name = [string]$_.Name
-            Address = [string]$_.Address
-        }
-    })
-
+    $targets = @(Get-NMEnabledTargets)
     if ($targets.Count -lt 1) {
         return
     }
 
-    $script:NMPingWorker.RunWorkerAsync([pscustomobject]@{
-        Generation = [int]$script:NMGeneration
-        Targets = $targets
-        TimeoutMs = [int]$script:NMConfig.PingTimeoutMilliseconds
-    })
+    Clear-NMPingCycleJobs
+    $script:NMPingCycleGeneration = [int]$script:NMGeneration
+    $jobs = @()
+
+    foreach ($target in $targets) {
+        $name = [string]$target.Name
+        $address = [string]$target.Address
+        $ping = [System.Net.NetworkInformation.Ping]::new()
+
+        try {
+            $task = $ping.SendPingAsync($address, [int]$script:NMConfig.PingTimeoutMilliseconds)
+            $jobs += [pscustomobject]@{
+                Name = $name
+                Address = $address
+                Ping = $ping
+                Task = $task
+                StartError = ''
+            }
+        }
+        catch {
+            $ping.Dispose()
+            $jobs += New-NMFailedPingJob -Name $name -Address $address -ErrorMessage $_.Exception.Message
+        }
+    }
+
+    $script:NMPingCycleJobs = @($jobs)
+    $script:NMPingCycleBusy = $true
+    Complete-NMPingCycleIfReady
+    if ($script:NMPingCycleBusy -and $script:NMPingCompletionTimer) {
+        $script:NMPingCompletionTimer.Start()
+    }
+}
+
+function Complete-NMPingCycleIfReady {
+    if (-not $script:NMPingCycleBusy) {
+        if ($script:NMPingCompletionTimer) {
+            $script:NMPingCompletionTimer.Stop()
+        }
+        return
+    }
+
+    foreach ($job in @($script:NMPingCycleJobs)) {
+        if ($job.Task -and -not $job.Task.IsCompleted) {
+            return
+        }
+    }
+
+    if ($script:NMPingCompletionTimer) {
+        $script:NMPingCompletionTimer.Stop()
+    }
+
+    $results = [System.Collections.ArrayList]::new()
+    foreach ($job in @($script:NMPingCycleJobs)) {
+        $entry = [ordered]@{
+            Name = [string]$job.Name
+            Address = [string]$job.Address
+            Success = $false
+            RttMs = $null
+            Bytes = $null
+            Ttl = $null
+        }
+
+        try {
+            if ($job.StartError) {
+                Write-NMDebugLog -Message ("Unable to start ping for {0}: {1}" -f $job.Name, $job.StartError)
+            }
+            elseif ($job.Task) {
+                $reply = $job.Task.GetAwaiter().GetResult()
+                if ($reply.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
+                    $entry.Success = $true
+                    $entry.RttMs = [int]$reply.RoundtripTime
+                    $entry.Bytes = [int]$reply.Buffer.Length
+                    if ($reply.Options) {
+                        $entry.Ttl = [int]$reply.Options.Ttl
+                    }
+                }
+            }
+        }
+        catch {
+            Write-NMDebugLog -Message ("Ping result error for {0}: {1}" -f $job.Name, $_.Exception.Message)
+        }
+        finally {
+            if ($job.Ping) {
+                $job.Ping.Dispose()
+            }
+        }
+
+        [void]$results.Add([pscustomobject]$entry)
+    }
+
+    $generation = [int]$script:NMPingCycleGeneration
+    $script:NMPingCycleJobs = @()
+    $script:NMPingCycleBusy = $false
+
+    if ($generation -ne [int]$script:NMGeneration) {
+        if ($script:NMPingTimer -and $script:NMPingTimer.Enabled) {
+            Invoke-NMPingCycle
+        }
+        return
+    }
+
+    Invoke-NMOnPingResults -Results @($results)
 }

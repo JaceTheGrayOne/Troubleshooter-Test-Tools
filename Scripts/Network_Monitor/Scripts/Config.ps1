@@ -64,8 +64,8 @@ function Get-NMDefaultConfig {
         AutoStart = $true
         DebugMode = $false
         Window = [ordered]@{
-            Width = 1120
-            Height = 330
+            Width = 1040
+            Height = 270
             X = $null
             Y = $null
             Maximized = $false
@@ -86,80 +86,6 @@ function Get-NMDefaultConfig {
             OrangeMax = 25
         }
     }
-}
-
-function Merge-NMHashtableSection {
-    param(
-        [Parameter(Mandatory)][System.Collections.IDictionary]$Target,
-        [Parameter(Mandatory)][System.Collections.IDictionary]$Source
-    )
-
-    foreach ($key in @($Source.Keys)) {
-        if (Test-NMMapKey -Map $Target -Key ([string]$key)) {
-            $Target[$key] = Copy-NMDeepValue -Value $Source[$key]
-        }
-    }
-}
-
-function Merge-NMColumns {
-    param([AllowNull()]$InputColumns)
-
-    $defaultColumns = @((Get-NMDefaultConfig).Columns)
-    if ($null -eq $InputColumns) {
-        return $defaultColumns
-    }
-
-    $result = @()
-    $seen = @{}
-    foreach ($column in @($InputColumns)) {
-        $copy = Copy-NMDeepValue -Value $column
-        if ($copy -is [System.Collections.IDictionary] -and (Test-NMMapKey -Map $copy -Key 'Id')) {
-            $id = [string]$copy.Id
-            $seen[$id] = $true
-            $definition = $script:NMColumnDefinitions[$id]
-            if ($definition) {
-                if (-not (Test-NMMapKey -Map $copy -Key 'Visible')) { $copy.Visible = [bool]$definition.DefaultVisible }
-                if (-not (Test-NMMapKey -Map $copy -Key 'Width')) { $copy.Width = [int]$definition.DefaultWidth }
-            }
-        }
-        $result += $copy
-    }
-
-    foreach ($defaultColumn in $defaultColumns) {
-        if (-not $seen.ContainsKey([string]$defaultColumn.Id)) {
-            $result += (Copy-NMDeepValue -Value $defaultColumn)
-        }
-    }
-
-    return @($result)
-}
-
-function Merge-NMConfig {
-    param([AllowNull()]$InputConfig)
-
-    $config = Copy-NMDeepValue -Value (Get-NMDefaultConfig)
-    if ($null -eq $InputConfig) {
-        return $config
-    }
-
-    $input = ConvertTo-NMHashtable -Value $InputConfig
-    foreach ($topLevel in @('Targets', 'RefreshMilliseconds', 'PingTimeoutMilliseconds', 'HistoryLength', 'AlwaysOnTop', 'AutoStart', 'DebugMode')) {
-        if (Test-NMMapKey -Map $input -Key $topLevel) {
-            $config[$topLevel] = Copy-NMDeepValue -Value $input[$topLevel]
-        }
-    }
-
-    foreach ($section in @('Window', 'Health', 'RttThresholds', 'LossThresholds')) {
-        if ((Test-NMMapKey -Map $input -Key $section) -and $input[$section] -is [System.Collections.IDictionary]) {
-            Merge-NMHashtableSection -Target $config[$section] -Source $input[$section]
-        }
-    }
-
-    if (Test-NMMapKey -Map $input -Key 'Columns') {
-        $config.Columns = Merge-NMColumns -InputColumns $input.Columns
-    }
-
-    return $config
 }
 
 function Backup-NMInvalidConfig {
@@ -230,8 +156,7 @@ function Initialize-NMConfig {
 
     try {
         $raw = Get-Content -Raw -LiteralPath $script:NMConfigPath
-        $loaded = $raw | ConvertFrom-Json
-        $config = Merge-NMConfig -InputConfig $loaded
+        $config = ConvertTo-NMHashtable -Value ($raw | ConvertFrom-Json)
         $errors = @()
         if (-not (Test-NMConfig -Config $config -Errors ([ref]$errors))) {
             throw ($errors -join '; ')
@@ -260,4 +185,15 @@ function Get-NMConfigColumn {
 
 function Save-NMCurrentConfig {
     Save-NMConfig -Config $script:NMConfig
+}
+
+function Invoke-NMConfigEdit {
+    param([Parameter(Mandatory)][scriptblock]$Edit)
+
+    $candidate = Copy-NMDeepValue -Value $script:NMConfig
+    & $Edit $candidate
+
+    Save-NMConfig -Config $candidate
+    $script:NMConfig = $candidate
+    return $true
 }
