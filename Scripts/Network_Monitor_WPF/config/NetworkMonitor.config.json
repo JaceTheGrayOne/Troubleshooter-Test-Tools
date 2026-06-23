@@ -26,10 +26,10 @@
   "AutoStart": true,
   "DebugMode": false,
   "Window": {
-    "Width": 1120,
-    "Height": 330,
-    "X": 539,
-    "Y": 48,
+    "Width": 1040,
+    "Height": 270,
+    "X": null,
+    "Y": null,
     "Maximized": false
   },
   "Columns": [
